@@ -5,5 +5,6 @@
 
 하나의 폴더에 app.py, Intergrate_new.csv, requirements.txt를 두고
 VScode 터미널에
+
 pip install -r requirements.txt (맨 처음에만)
 streamlit run app.py 입력
