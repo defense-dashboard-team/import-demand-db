@@ -2,3 +2,8 @@
 거시경제 지표와 분쟁 위험도 기반 무기수출 유망국 선정 대시보드 생성 프로젝트
 해당 대쉬보드 구성을 위해 수집한 데이터들의 모임
 본 .py 파일들은 모두 전처리 되어있음.
+
+하나의 폴더에 app.py, Intergrate_new.csv, requirements.txt를 두고
+VScode 터미널에
+pip install -r requirements.txt (맨 처음에만)
+streamlit run app.py 입력
