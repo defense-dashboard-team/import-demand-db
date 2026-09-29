@@ -1,0 +1,2212 @@
+import os
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+
+# =========================================================
+# 1. 페이지 설정
+# =========================================================
+
+st.set_page_config(
+    page_title="방산시장 분석 대시보드",
+    page_icon="🌍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+# =========================================================
+# 2. 경로 / 데이터 설정
+# =========================================================
+
+BASE_DIR = Path(__file__).parent
+
+CSV_CANDIDATES = [
+    BASE_DIR / "integrate_new.csv",
+    BASE_DIR / "Integrate_new.csv",
+    BASE_DIR.parent / "data" / "integrate_new.csv",
+    BASE_DIR.parent / "data" / "Integrate_new.csv",
+]
+
+USE_DB = os.getenv("USE_DB", "false").lower() == "true"
+DB_URL = os.getenv("DB_URL", "")
+SSL_CA = os.getenv("SSL_CA", "")
+
+YEAR_MIN = 2004
+YEAR_MAX = 2025
+RISK_START = 2017
+
+X_COL = "share_gdp_pct"
+SIZE_COL = "gdp_calculated"
+MILEX_COL = "current_usd"
+
+# ---- 네이비 / 블루 팔레트 ----
+NAVY_DEEP = "#0B2545"   # 가장 진한 네이비 (제목, 컬러스케일 끝)
+NAVY = "#13315C"        # 기본 네이비
+BLUE = "#1F6FEB"        # 포인트 블루
+BLUE_SOFT = "#8ECAE6"   # 연한 블루
+PURPLE = "#6C5CE7"      # 분쟁위험도 계열
+ORANGE = "#E07A3F"      # 군사비(포인트)
+RED = "#D64545"         # 선택 국가 강조
+GRAY_TEXT = "#5A6B7B"
+
+
+# 유사 국가 테두리 (둘 중 하나만 활성화해서 비교)
+SIM_EDGE = ORANGE       # [A안] 앰버/주황 포인트
+# SIM_EDGE = "#111111"  # [B안] 검정 단색
+
+# 버블 컬러스케일 (연한 톤 → 진한 네이비)
+BLUE_SCALE = ["#DCEBFB", "#5B9BE8", BLUE, NAVY_DEEP]
+PURPLE_SCALE = ["#EAE6FA", "#A99BEC", PURPLE, "#2E2472"]
+
+# 상관계수용 발산형 (음수 = 붉은색, 0 = 흰색, 양수 = 네이비)
+CORR_SCALE = [
+    [0.0, "#B3423A"],
+    [0.5, "#F5F8FC"],
+    [1.0, NAVY],
+]
+
+MILEX_COLOR = ORANGE
+BUBBLE_MIN = 6
+BUBBLE_MAX = 46
+
+BASE_LAYOUT = dict(
+    template="plotly_white",
+    font=dict(
+        family="Malgun Gothic, AppleGothic, NanumGothic, sans-serif",
+        size=12,
+    ),
+    margin=dict(l=60, r=70, t=55, b=55),
+    hovermode="closest",
+)
+
+
+# =========================================================
+# 3. 데이터 로드
+# =========================================================
+
+def find_csv_path():
+    for path in CSV_CANDIDATES:
+        if path.exists():
+            return path
+    return CSV_CANDIDATES[0]
+
+
+@st.cache_data(ttl=3600)
+def load_data():
+    df = None
+
+    # DB 사용 설정이 켜져 있고 DB_URL이 있을 때만 접속 시도
+    if USE_DB and DB_URL:
+        try:
+            from sqlalchemy import create_engine
+
+            connect_args = {"connect_timeout": 5}
+            if SSL_CA:
+                connect_args["ssl"] = {"ca": SSL_CA}
+
+            engine = create_engine(
+                DB_URL,
+                connect_args=connect_args,
+            )
+            df = pd.read_sql("SELECT * FROM integrate", con=engine)
+
+        except Exception:
+            df = None
+
+    # DB 실패 또는 미사용 시 CSV
+    if df is None:
+        csv_path = find_csv_path()
+        df = pd.read_csv(csv_path)
+
+    df.columns = [
+        c.strip("\ufeff").strip()
+        for c in df.columns
+    ]
+
+    numeric_cols = [
+        "Year",
+        "current_usd",
+        "gdp_calculated",
+        "share_gdp",
+        "TIV_5Y_Sum",
+        "TIV_5Y_Share",
+        "human_hazard_score",
+    ]
+
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce",
+            )
+
+    required = [
+        "Year",
+        "Country",
+        "Iso3",
+        "current_usd",
+        "gdp_calculated",
+        "share_gdp",
+        "TIV_5Y_Share",
+        "human_hazard_score",
+    ]
+
+    missing = [
+        col
+        for col in required
+        if col not in df.columns
+    ]
+
+    if missing:
+        raise ValueError(
+            "필수 컬럼이 없습니다: "
+            + ", ".join(missing)
+        )
+
+    df = df.dropna(
+        subset=[
+            "Year",
+            "Country",
+            "Iso3",
+        ]
+    ).copy()
+
+    df["Year"] = df["Year"].astype(int)
+
+    df = df[
+        (df["Year"] >= YEAR_MIN)
+        &
+        (df["Year"] <= YEAR_MAX)
+    ].copy()
+
+    indicator_cols = [
+        "current_usd",
+        "gdp_calculated",
+        "share_gdp",
+        "TIV_5Y_Share",
+        "human_hazard_score",
+    ]
+
+    df = df[
+        ~df[indicator_cols]
+        .isna()
+        .all(axis=1)
+    ].copy()
+
+    # 기존 두 번째 페이지 코드와 동일한 파생변수
+    df["share_gdp_pct"] = df["share_gdp"] * 100
+
+    return df
+
+
+try:
+    df = load_data()
+
+except Exception as e:
+    st.error(
+        "데이터를 불러오지 못했습니다: "
+        f"{type(e).__name__} — {e}"
+    )
+    st.stop()
+
+
+# =========================================================
+# 4. 공통 국가 코드 매핑
+# =========================================================
+
+names = (
+    df[["Iso3", "Country"]]
+    .drop_duplicates()
+    .sort_values("Country")
+)
+
+ISO_TO_NAME = dict(
+    zip(
+        names["Iso3"],
+        names["Country"],
+    )
+)
+
+NAME_TO_ISO = dict(
+    zip(
+        names["Country"],
+        names["Iso3"],
+    )
+)
+
+NONE_LABEL = "(선택 안 함)"
+
+
+# =========================================================
+# 5. 공통 상태 초기화
+# =========================================================
+
+if "sel_year" not in st.session_state:
+    st.session_state.sel_year = (
+        2025
+        if 2025 in df["Year"].unique()
+        else int(df["Year"].max())
+    )
+
+if "sel_country" not in st.session_state:
+    st.session_state.sel_country = NONE_LABEL
+
+if "selected_metric" not in st.session_state:
+    st.session_state.selected_metric = "TIV 수입 점유율"
+
+if "map_version" not in st.session_state:
+    st.session_state.map_version = 0
+
+if "app_page" not in st.session_state:
+    st.session_state.app_page = "1페이지 · 국가별 현황"
+
+
+# =========================================================
+# 6. 지도/버블 클릭으로 전달된 국가를
+#    사이드바 위젯 생성 전에 먼저 반영
+# =========================================================
+
+if "pending_country" in st.session_state:
+    pending_country = st.session_state.pending_country
+
+    if pending_country in NAME_TO_ISO:
+        st.session_state.sel_country = pending_country
+
+    del st.session_state.pending_country
+
+
+# =========================================================
+# 7. 공통 사이드바
+# =========================================================
+
+with st.sidebar:
+    st.header("조회 조건")
+
+    available_years = sorted(
+        df["Year"].dropna().unique().tolist(),
+        reverse=True,
+    )
+
+    st.selectbox(
+        "연도 선택",
+        options=available_years,
+        key="sel_year",
+    )
+
+    year_country_options = sorted(
+        df.loc[
+            df["Year"] == st.session_state.sel_year,
+            "Country",
+        ]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    country_options = (
+        [NONE_LABEL]
+        + year_country_options
+    )
+
+    # 연도를 바꾼 뒤 선택 국가가 그 해에 없으면 초기화
+    if (
+        st.session_state.sel_country
+        != NONE_LABEL
+        and
+        st.session_state.sel_country
+        not in country_options
+    ):
+        st.session_state.sel_country = NONE_LABEL
+
+    st.selectbox(
+        "국가 선택",
+        options=country_options,
+        key="sel_country",
+    )
+
+    st.divider()
+
+    st.caption(
+        "지도·버블차트에서 국가를 선택해도 "
+        "이 국가 선택값에 자동 반영됩니다."
+    )
+
+
+year = int(st.session_state.sel_year)
+chosen_name = st.session_state.sel_country
+sel_iso = (
+    None
+    if chosen_name == NONE_LABEL
+    else NAME_TO_ISO.get(chosen_name)
+)
+
+
+# =========================================================
+# 8. 페이지 전환
+# =========================================================
+
+page = st.radio(
+    "페이지",
+    options=[
+        "1페이지 · 국가별 현황",
+        "2페이지 · 복합지표",
+    ],
+    horizontal=True,
+    key="app_page",
+)
+
+
+# =========================================================
+# 9. 공통 헬퍼
+# =========================================================
+
+def empty_figure(message, height=460):
+    fig = go.Figure()
+
+    fig.add_annotation(
+        text=message,
+        xref="paper",
+        yref="paper",
+        x=0.5,
+        y=0.5,
+        showarrow=False,
+        font=dict(
+            size=14,
+            color="#7A8794",
+        ),
+    )
+
+    fig.update_layout(
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        height=height,
+        **BASE_LAYOUT,
+    )
+
+    return fig
+
+
+def extract_selected_point(event):
+    try:
+        points = event.selection.points
+    except Exception:
+        try:
+            points = event["selection"]["points"]
+        except Exception:
+            return None
+
+    if not points:
+        return None
+
+    return points[-1]
+
+
+def get_clicked_country_from_map(event, map_df):
+    point = extract_selected_point(event)
+
+    if point is None:
+        return None
+
+    try:
+        customdata = point.get("customdata")
+        if customdata is not None and len(customdata) > 0:
+            return str(customdata[0])
+    except Exception:
+        pass
+
+    try:
+        location = point.get("location")
+        if location is not None:
+            match = map_df.loc[
+                map_df["Iso3"] == location,
+                "Country",
+            ]
+            if not match.empty:
+                return match.iloc[0]
+    except Exception:
+        pass
+
+    return None
+
+
+def sync_clicked_country(country_name):
+    if (
+        country_name
+        and
+        country_name in NAME_TO_ISO
+        and
+        country_name != st.session_state.sel_country
+    ):
+        st.session_state.pending_country = country_name
+        st.session_state.map_version += 1
+        st.rerun()
+
+
+# =========================================================
+# 10. 1페이지 설정
+# =========================================================
+
+PAGE1_METRICS = {
+    "분쟁 위험도": {
+        "column": "human_hazard_score",
+        "unit": "점",
+    },
+    "TIV 수입 점유율": {
+        "column": "TIV_5Y_Share",
+        "unit": "%",
+    },
+    "군사비": {
+        "column": "current_usd",
+        "unit": "백만 US$",
+    },
+    "GDP": {
+        "column": "gdp_calculated",
+        "unit": "백만 US$",
+    },
+}
+
+
+def change_metric(metric):
+    st.session_state.selected_metric = metric
+    st.session_state.map_version += 1
+
+
+def make_page1_map(
+    selected_metric,
+    selected_country=None,
+    height=430,
+):
+    metric_column = PAGE1_METRICS[
+        selected_metric
+    ]["column"]
+
+    map_df = df[
+        (df["Year"] == year)
+        &
+        (df[metric_column].notna())
+    ].copy()
+
+    map_df = (
+        map_df.groupby(
+            ["Country", "Iso3"],
+            as_index=False,
+        )[metric_column]
+        .mean()
+        .reset_index(drop=True)
+    )
+
+    if selected_metric in [
+        "GDP",
+        "군사비",
+    ]:
+        map_df["MapValue"] = np.log10(
+            map_df[metric_column]
+            .clip(lower=1)
+        )
+        color_column = "MapValue"
+    else:
+        color_column = metric_column
+
+    fig = px.choropleth(
+        map_df,
+        locations="Iso3",
+        locationmode="ISO-3",
+        color=color_column,
+        hover_name="Country",
+        custom_data=[
+            "Country",
+            "Iso3",
+            metric_column,
+        ],
+        color_continuous_scale="YlOrRd",
+        projection="natural earth",
+    )
+
+    if selected_metric == "TIV 수입 점유율":
+        fig.update_traces(
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "TIV 수입 점유율: "
+                "%{customdata[2]:.2f}%"
+                "<extra></extra>"
+            )
+        )
+
+    elif selected_metric == "분쟁 위험도":
+        fig.update_traces(
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "분쟁 위험도: "
+                "%{customdata[2]:.2f}점"
+                "<extra></extra>"
+            )
+        )
+
+    elif selected_metric == "군사비":
+        fig.update_traces(
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "군사비: "
+                "%{customdata[2]:,.0f} 백만 US$"
+                "<extra></extra>"
+            )
+        )
+
+    else:
+        fig.update_traces(
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "GDP: "
+                "%{customdata[2]:,.0f} 백만 US$"
+                "<extra></extra>"
+            )
+        )
+
+    # 사이드바 / 다른 페이지에서 선택된 국가도
+    # 지도에서 클릭한 것처럼 강조
+    if selected_country is not None:
+        selected_rows = np.where(
+            map_df["Country"].values
+            == selected_country
+        )[0]
+
+        if len(selected_rows) > 0:
+            selected_index = int(
+                selected_rows[0]
+            )
+
+            fig.update_traces(
+                selectedpoints=[
+                    selected_index
+                ],
+                selected=dict(
+                    marker=dict(
+                        opacity=1.0
+                    )
+                ),
+                unselected=dict(
+                    marker=dict(
+                        opacity=0.12
+                    )
+                ),
+            )
+
+    if selected_metric in [
+        "GDP",
+        "군사비",
+    ]:
+        fig.update_coloraxes(
+            colorbar_title=(
+                f"log10({selected_metric})"
+            )
+        )
+    else:
+        fig.update_coloraxes(
+            colorbar_title=selected_metric
+        )
+
+    fig.update_layout(
+        height=height,
+        clickmode="event+select",
+        hovermode="closest",
+        title=(
+            f"{year}년 국가별 "
+            f"{selected_metric}"
+        ),
+        geo=dict(
+            showframe=False,
+            showcoastlines=True,
+            coastlinecolor="gray",
+            showland=True,
+            landcolor="rgb(240,240,240)",
+        ),
+        margin=dict(
+            l=0,
+            r=0,
+            t=50,
+            b=0,
+        ),
+    )
+
+    return fig, map_df
+
+
+def make_page1_line(
+    country_name,
+    selected_metric,
+):
+    metric_column = PAGE1_METRICS[
+        selected_metric
+    ]["column"]
+
+    metric_unit = PAGE1_METRICS[
+        selected_metric
+    ]["unit"]
+
+    country_df = df[
+        (df["Country"] == country_name)
+        &
+        (df[metric_column].notna())
+    ].copy()
+
+    country_df = (
+        country_df.groupby(
+            "Year",
+            as_index=False,
+        )[metric_column]
+        .mean()
+        .sort_values("Year")
+    )
+
+    if country_df.empty:
+        return empty_figure(
+            "해당 국가의 시계열 데이터가 없습니다.",
+            height=500,
+        )
+
+    fig = px.line(
+        country_df,
+        x="Year",
+        y=metric_column,
+        markers=True,
+        labels={
+            "Year": "연도",
+            metric_column: (
+                f"{selected_metric} "
+                f"({metric_unit})"
+            ),
+        },
+    )
+
+    if selected_metric == "TIV 수입 점유율":
+        hover = (
+            "연도: %{x}<br>"
+            "TIV 수입 점유율: "
+            "%{y:.2f}%"
+            "<extra></extra>"
+        )
+
+    elif selected_metric == "분쟁 위험도":
+        hover = (
+            "연도: %{x}<br>"
+            "분쟁 위험도: "
+            "%{y:.2f}점"
+            "<extra></extra>"
+        )
+
+    else:
+        hover = (
+            "연도: %{x}<br>"
+            + selected_metric
+            + ": %{y:,.0f} 백만 US$"
+            "<extra></extra>"
+        )
+
+    fig.update_traces(
+        hovertemplate=hover
+    )
+
+    fig.update_layout(
+        height=500,
+        hovermode="x unified",
+        xaxis=dict(dtick=1),
+        margin=dict(
+            l=20,
+            r=20,
+            t=20,
+            b=40,
+        ),
+    )
+
+    return fig
+
+
+def make_page1_radar(
+    country_name,
+):
+    indicator_map = {
+        "분쟁 위험도":
+            "human_hazard_score",
+        "TIV 수입 점유율":
+            "TIV_5Y_Share",
+        "군사비":
+            "current_usd",
+        "GDP":
+            "gdp_calculated",
+        "군사비/GDP":
+            "share_gdp",
+    }
+
+    year_df = df[
+        df["Year"] == year
+    ].copy()
+
+    year_df = (
+        year_df.groupby(
+            ["Country", "Iso3"],
+            as_index=False,
+        )[
+            list(
+                indicator_map.values()
+            )
+        ]
+        .mean()
+    )
+
+    for label, col in indicator_map.items():
+        year_df[
+            col + "_scaled"
+        ] = (
+            year_df[col]
+            .rank(pct=True)
+            * 100
+        )
+
+    country_data = year_df[
+        year_df["Country"]
+        == country_name
+    ]
+
+    if country_data.empty:
+        return empty_figure(
+            "선택 국가의 레이더차트 데이터가 없습니다.",
+            height=500,
+        )
+
+    country_row = (
+        country_data.iloc[0]
+    )
+
+    categories = list(
+        indicator_map.keys()
+    )
+
+    values = [
+        country_row[
+            indicator_map[label]
+            + "_scaled"
+        ]
+        for label in categories
+    ]
+
+    raw_values = [
+        country_row[
+            indicator_map[label]
+        ]
+        for label in categories
+    ]
+
+    if any(
+        pd.isna(value)
+        for value in raw_values
+    ):
+        return empty_figure(
+            "레이더차트에 필요한 일부 지표가 없습니다.",
+            height=500,
+        )
+
+    raw_text = [
+        f"{raw_values[0]:,.2f}점",
+        f"{raw_values[1]:,.2f}%",
+        f"{raw_values[2]:,.0f} 백만 US$",
+        f"{raw_values[3]:,.0f} 백만 US$",
+        f"{raw_values[4]:,.2f}%",
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatterpolar(
+            r=values + [values[0]],
+            theta=categories + [categories[0]],
+            fill="toself",
+            name=country_name,
+            customdata=(
+                raw_text
+                + [raw_text[0]]
+            ),
+            hovertemplate=(
+                "<b>%{theta}</b><br>"
+                "상대점수: "
+                "%{r:.1f}점<br>"
+                "실제 값: "
+                "%{customdata}"
+                "<extra></extra>"
+            ),
+        )
+    )
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 100],
+                tickvals=[
+                    0,
+                    20,
+                    40,
+                    60,
+                    80,
+                    100,
+                ],
+            )
+        ),
+        height=500,
+        showlegend=True,
+        margin=dict(
+            l=60,
+            r=60,
+            t=20,
+            b=30,
+        ),
+    )
+
+    return fig
+
+
+# =========================================================
+# 11. 2페이지 설정
+# =========================================================
+
+PAGE2_METRIC = {
+    "risk": {
+        "col":
+            "human_hazard_score",
+        "label":
+            "분쟁위험도",
+        "color":
+            PURPLE,
+            # "#C1663B",
+        "scale":
+            PURPLE_SCALE,
+            # "OrRd",
+        "fmt":
+            ".1f",
+        "log_y":
+            False,
+        "log_color":
+            False,
+        "yticks":
+            None,
+        "ytext":
+            None,
+    },
+    "tiv": {
+        "col":
+            "TIV_5Y_Share",
+        "label":
+            "TIV 5년 점유율 (%)",
+        "color":
+            BLUE,
+            # "#2C7A5A",
+        "scale":
+            BLUE_SCALE,
+            # "BuGn",
+        "fmt":
+            ".3f",
+        "log_y":
+            True,
+        "log_color":
+            True,
+        "yticks":
+            [
+                0.004,
+                0.01,
+                0.03,
+                0.1,
+                0.3,
+                1,
+                3,
+                10,
+            ],
+        "ytext":
+            [
+                "0",
+                "0.01",
+                "0.03",
+                "0.1",
+                "0.3",
+                "1",
+                "3",
+                "10",
+            ],
+    },
+}
+
+
+def bubble_size(values):
+    v = np.sqrt(
+        np.clip(
+            values.astype(float),
+            0,
+            None,
+        )
+    )
+
+    lo = np.nanmin(v)
+    hi = np.nanmax(v)
+
+    if hi == lo:
+        return np.full(
+            len(v),
+            (
+                BUBBLE_MIN
+                + BUBBLE_MAX
+            ) / 2,
+        )
+
+    return (
+        BUBBLE_MIN
+        + (v - lo)
+        / (hi - lo)
+        * (
+            BUBBLE_MAX
+            - BUBBLE_MIN
+        )
+    )
+
+SIM_TOP_N = 5
+
+CORR_VARS = [
+    ("GDP", "gdp_calculated", True),
+    ("군사비", "current_usd", True),
+    ("군사비/GDP", X_COL, False),
+    ("TIV 수입 점유율", "TIV_5Y_Share", True),
+    ("분쟁 위험도", "human_hazard_score", False),
+]
+
+
+def similarity_axes(d, metric):
+    """버블차트 화면에 보이는 좌표(로그축 반영)를 그대로 거리 계산에 사용"""
+    m = PAGE2_METRIC[metric]
+
+    fx = np.log10(d[X_COL].clip(lower=0.01))
+
+    if m["log_y"]:
+        fy = np.log10(d[m["col"]].clip(lower=0.004))
+    else:
+        fy = d[m["col"]].astype(float)
+
+    return fx, fy
+
+
+def find_similar_countries(
+    data,
+    year,
+    metric,
+    iso,
+    top_n=SIM_TOP_N,
+):
+    """
+    유사도 정의
+    ------------------------------------------------
+    1) 비교 축 3개
+       - log10(GDP 대비 군사비) : 버블차트 x축
+       - 기준지표                : 버블차트 y축
+                                  (TIV는 log10)
+       - log10(GDP)             : 국가 체급
+         * 버블 크기 라디오와 무관하게 GDP 고정
+    2) 각 축을 그 해 전체 국가 기준 z-표준화
+       -> 단위가 다른 축을 같은 저울에 올림
+       -> 거리 1 = 표준편차 1개만큼 떨어짐
+    3) 표준화 유클리드 거리 d 계산
+    4) 축 개수로 정규화 : d / sqrt(축 개수)
+       -> 축 하나당 평균 거리로 환산
+       -> 축을 몇 개 쓰든 눈금이 같아짐
+    5) 유사도 = 100 * exp(-정규화 거리)
+       -> 거리 0이면 100, 멀수록 지수적으로 감쇠
+       -> 절대 기준이라 국가·연도 간 비교 가능
+       -> 지수 감쇠는 표시용 변환이며
+          순위는 거리 d 그대로임
+    """
+    m = PAGE2_METRIC[metric]
+    other = "tiv" if metric == "risk" else "risk"
+    o = PAGE2_METRIC[other]
+
+    need = [X_COL, m["col"], SIZE_COL]
+
+    d = data[data["Year"] == year].dropna(
+        subset=need
+    )
+    d = d[
+        (d[X_COL] > 0)
+        & (d[SIZE_COL] > 0)
+    ].copy()
+
+    if d.empty or iso not in set(d["Iso3"]):
+        return None, other
+
+    fx, fy = similarity_axes(d, metric)
+    fz = np.log10(d[SIZE_COL])
+
+    axes = []
+
+    for f in (fx, fy, fz):
+        sd = f.std(ddof=0) or 1.0
+        axes.append((f - f.mean()) / sd)
+
+    pos = d.index[d["Iso3"] == iso][0]
+    base = [a.loc[pos] for a in axes]
+
+    d["_dist"] = np.sqrt(
+        sum(
+            (a - b) ** 2
+            for a, b in zip(axes, base)
+        )
+    )
+
+    d["유사도"] = 100 * np.exp(
+        -d["_dist"] / np.sqrt(len(axes))
+    )
+
+    out = (
+        d[d["Iso3"] != iso]
+        .nsmallest(top_n, "_dist")
+        .copy()
+    )
+
+    out.insert(0, "순위", range(1, len(out) + 1))
+
+    cols = [
+        "순위",
+        "Country",
+        "Iso3",
+        "유사도",
+        "_dist",
+        X_COL,
+        m["col"],
+        o["col"],
+    ]
+
+    return out[cols], other
+
+
+def make_corr_heatmap(
+    data,
+    year,
+    method="spearman",
+    height=430,
+):
+    d = data[data["Year"] == year]
+
+    frame = {}
+    labels = []
+
+    for label, col, is_skewed in CORR_VARS:
+        if col not in d.columns:
+            continue
+
+        s = pd.to_numeric(d[col], errors="coerce")
+
+        if s.notna().sum() < 10:
+            continue
+
+        if method == "pearson" and is_skewed:
+            s = np.log10(s.where(s > 0))
+            label = f"{label} (로그)"
+
+        frame[label] = s
+        labels.append(label)
+
+    if len(labels) < 2:
+        return empty_figure(
+            f"{year}년에는 상관분석에 쓸 지표가 부족합니다.",
+            height=height,
+        ), 0
+
+    mat = pd.DataFrame(frame)
+    n = int(mat.dropna().shape[0])
+    corr = mat.corr(method=method).loc[labels, labels]
+
+    fig = go.Figure(
+        go.Heatmap(
+            z=corr.values,
+            x=labels,
+            y=labels,
+            zmin=-1,
+            zmax=1,
+            zmid=0,
+            colorscale=CORR_SCALE,
+            text=np.round(corr.values, 2),
+            texttemplate="%{text:.2f}",
+            textfont=dict(size=11),
+            hovertemplate=(
+                "%{y} ↔ %{x}<br>"
+                "상관계수 %{z:.2f}"
+                "<extra></extra>"
+            ),
+            colorbar=dict(
+                thickness=12,
+                len=0.8,
+                tickvals=[-1, -0.5, 0, 0.5, 1],
+            ),
+        )
+    )
+
+    fig.update_yaxes(autorange="reversed")
+
+    fig.update_layout(
+        title=dict(
+            text=(
+                f"{year}년 지표 간 상관관계 "
+                f"({'스피어만' if method == 'spearman' else '피어슨'}"
+                f", n={n})"
+            ),
+            font=dict(size=15, color=NAVY_DEEP),
+        ),
+        height=height,
+        xaxis=dict(tickangle=-20, side="bottom"),
+        **BASE_LAYOUT,
+    )
+
+    return fig, n
+
+def make_bubble(
+    data,
+    year,
+    metric="risk",
+    size_col=SIZE_COL,
+    highlight=None,
+    similar=None,
+):
+    m = PAGE2_METRIC[metric]
+
+    if (
+        metric == "risk"
+        and
+        year < RISK_START
+    ):
+        return empty_figure(
+            f"분쟁위험도(INFORM)는 "
+            f"{RISK_START}년부터 제공됩니다.<br>"
+            f"{RISK_START}년 이후를 선택하거나 "
+            "TIV 차트를 이용하세요."
+        )
+
+    d = data[
+        data["Year"] == year
+    ].dropna(
+        subset=[
+            X_COL,
+            m["col"],
+            size_col,
+        ]
+    )
+
+    d = d[
+        (d[X_COL] > 0)
+        &
+        (d[size_col] > 0)
+    ]
+
+    if d.empty:
+        return empty_figure(
+            f"{year}년 데이터가 없습니다."
+        )
+
+    y = (
+        d[m["col"]]
+        .clip(lower=0.004)
+        if m["log_y"]
+        else d[m["col"]]
+    )
+
+    if m["log_color"]:
+        cvals = np.log10(
+            d[m["col"]]
+            .clip(lower=0.004)
+        )
+
+        color_ticks = [
+            0.004,
+            0.01,
+            0.1,
+            1,
+            10,
+        ]
+
+        colorbar = dict(
+            title=dict(
+                text=m["label"],
+                side="right",
+            ),
+            thickness=12,
+            len=0.75,
+            tickvals=np.log10(
+                color_ticks
+            ),
+            ticktext=[
+                "0",
+                "0.01",
+                "0.1",
+                "1",
+                "10",
+            ],
+        )
+
+    else:
+        cvals = d[m["col"]]
+
+        colorbar = dict(
+            title=dict(
+                text=m["label"],
+                side="right",
+            ),
+            thickness=12,
+            len=0.75,
+        )
+    sim_set = set(similar or [])
+
+    fig = go.Figure(
+        go.Scatter(
+            x=d[X_COL],
+            y=y,
+            mode="markers",
+            customdata=np.stack(
+                [
+                    d["Country"],
+                    d["Iso3"],
+                    d[SIZE_COL],
+                    d[MILEX_COL],
+                    d[m["col"]],
+                ],
+                axis=-1,
+            ),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "GDP 대비 군사비 "
+                "%{x:.2f}%<br>"
+                + m["label"]
+                + " %{customdata[4]:"
+                + m["fmt"]
+                + "}<br>"
+                "GDP "
+                "%{customdata[2]:,.0f}<br>"
+                "군사비 "
+                "%{customdata[3]:,.0f}"
+                "<extra></extra>"
+            ),
+            marker=dict(
+                size=bubble_size(
+                    d[size_col]
+                ),
+                sizemode="diameter",
+                color=cvals,
+                colorscale=m["scale"],
+                showscale=True,
+                colorbar=colorbar,
+                opacity=(
+                    0.72
+                    if highlight is None
+                    else [
+                        1.0
+                        if iso == highlight
+                        else (
+                            0.85
+                            if iso in sim_set
+                            else 0.18
+                        )
+                        for iso in d["Iso3"]
+                    ]
+                ),
+                line=dict(
+                    width=[
+                        3.0
+                        if iso == highlight
+                        else (
+                            2.2
+                            if iso in sim_set
+                            else 0.5
+                        )
+                        for iso in d["Iso3"]
+                    ],
+                    color=[
+                        RED
+                        if iso == highlight
+                        else (
+                            SIM_EDGE
+                            if iso in sim_set
+                            else "rgba(60,60,60,0.35)"
+                        )
+                        for iso in d["Iso3"]
+                    ],
+                ),
+            ),
+            selected=dict(
+                marker=dict(
+                    opacity=0.95
+                )
+            ),
+            unselected=dict(
+                marker=dict(
+                    opacity=0.25
+                )
+            ),
+        )
+    )
+
+    fig.update_layout(
+        title=dict(
+            text=(
+                f"{year}년 · "
+                "GDP 대비 군사비 × "
+                f"{m['label']} "
+                f"(n={len(d)})"
+            ),
+            font=dict(size=15, color=NAVY_DEEP),
+        ),
+        xaxis=dict(
+            title="GDP 대비 군사비 (%)",
+            type="log",
+            tickvals=[
+                0.2,
+                0.5,
+                1,
+                2,
+                5,
+                10,
+                20,
+                40,
+            ],
+            ticktext=[
+                "0.2",
+                "0.5",
+                "1",
+                "2",
+                "5",
+                "10",
+                "20",
+                "40",
+            ],
+        ),
+        yaxis=dict(
+            title=m["label"],
+            type=(
+                "log"
+                if m["log_y"]
+                else "linear"
+            ),
+            tickvals=m["yticks"],
+            ticktext=m["ytext"],
+        ),
+        height=460,
+        **BASE_LAYOUT,
+    )
+
+    return fig
+
+
+def make_page2_line(
+    data,
+    iso,
+    metric="risk",
+):
+    m = PAGE2_METRIC[metric]
+
+    d = data[
+        data["Iso3"] == iso
+    ].sort_values("Year")
+
+    if d.empty:
+        return empty_figure(
+            "국가를 선택하세요."
+        )
+
+    name = d[
+        "Country"
+    ].iloc[0]
+
+    full = pd.DataFrame(
+        {
+            "Year":
+                range(
+                    YEAR_MIN,
+                    YEAR_MAX + 1,
+                )
+        }
+    )
+
+    d = full.merge(
+        d,
+        on="Year",
+        how="left",
+    )
+
+    fig = make_subplots(
+        specs=[
+            [
+                {
+                    "secondary_y":
+                        True
+                }
+            ]
+        ]
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=d["Year"],
+            y=d[MILEX_COL],
+            name="군사비",
+            mode="lines+markers",
+            connectgaps=False,
+            line=dict(
+                color=MILEX_COLOR,
+                width=2,
+            ),
+            marker=dict(size=4),
+            hovertemplate=(
+                "%{x}년<br>"
+                "군사비 "
+                "%{y:,.0f}"
+                "<extra></extra>"
+            ),
+        ),
+        secondary_y=False,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=d["Year"],
+            y=d[m["col"]],
+            name=m["label"],
+            mode="lines+markers",
+            connectgaps=False,
+            line=dict(
+                color=m["color"],
+                width=2,
+                dash="dot",
+            ),
+            marker=dict(size=4),
+            hovertemplate=(
+                "%{x}년<br>"
+                + m["label"]
+                + " %{y:"
+                + m["fmt"]
+                + "}"
+                "<extra></extra>"
+            ),
+        ),
+        secondary_y=True,
+    )
+
+    if metric == "risk":
+        fig.add_vrect(
+            x0=YEAR_MIN - 0.5,
+            x1=RISK_START - 0.5,
+            fillcolor="#000000",
+            opacity=0.05,
+            line_width=0,
+        )
+
+        fig.add_annotation(
+            x=(
+                YEAR_MIN
+                + RISK_START
+            ) / 2,
+            y=1.0,
+            yref="paper",
+            text=(
+                "위험도 미제공 "
+                f"(~{RISK_START - 1})"
+            ),
+            showarrow=False,
+            font=dict(
+                size=10,
+                color="#7A8794",
+            ),
+        )
+
+    fig.update_xaxes(
+        title_text="연도",
+        dtick=2,
+        range=[
+            YEAR_MIN - 0.5,
+            YEAR_MAX + 0.5,
+        ],
+    )
+
+    fig.update_yaxes(
+        title_text="군사비",
+        color=MILEX_COLOR,
+        secondary_y=False,
+        rangemode="tozero",
+    )
+
+    fig.update_yaxes(
+        title_text=m["label"],
+        color=m["color"],
+        secondary_y=True,
+        showgrid=False,
+        tickformat=m["fmt"],
+    )
+
+    fig.update_layout(
+        title=dict(
+            text=f"{name} · 연도별 추이",
+            font=dict(size=15),
+            y=0.97,
+            yanchor="top",
+        ),
+        legend=dict(
+            orientation="h",
+            y=1.02,
+            x=0,
+            yanchor="bottom",
+        ),
+        height=460,
+        margin=dict(
+            l=60,
+            r=70,
+            t=85,
+            b=55,
+        ),
+        template="plotly_white",
+        font=dict(
+            family=(
+                "Malgun Gothic, "
+                "AppleGothic, "
+                "NanumGothic, "
+                "sans-serif"
+            ),
+            size=12,
+        ),
+        hovermode="closest",
+    )
+
+    return fig
+
+
+# =========================================================
+# 12. 1페이지
+# =========================================================
+
+if page == "1페이지 · 국가별 현황":
+
+    st.title(
+        "🌍 방산시장 분석 대시보드"
+    )
+
+    st.caption(
+        "분쟁 위험도 · TIV 수입 점유율 · "
+        "군사비 · GDP를 기반으로 "
+        "국가별 방산시장 현황을 비교합니다."
+    )
+
+    st.subheader(
+        "국가별 방산시장 지표"
+    )
+
+    button_cols = st.columns(4)
+
+    metric_names = [
+        "분쟁 위험도",
+        "TIV 수입 점유율",
+        "군사비",
+        "GDP",
+    ]
+
+    for metric_name, col in zip(
+        metric_names,
+        button_cols,
+    ):
+        col.button(
+            metric_name,
+            key=f"metric_{metric_name}",
+            type=(
+                "primary"
+                if st.session_state.selected_metric
+                == metric_name
+                else "secondary"
+            ),
+            use_container_width=True,
+            on_click=change_metric,
+            args=(metric_name,),
+        )
+
+    selected_metric = (
+        st.session_state.selected_metric
+    )
+
+    # ---------------------------------------------
+    # 국가 미선택: 큰 지도
+    # ---------------------------------------------
+
+    if chosen_name == NONE_LABEL:
+
+        st.markdown(
+            """
+            ### 분석할 국가를 선택하세요
+
+            세계지도에서 국가를 클릭하거나
+            왼쪽 사이드바에서 국가를 선택하면
+            상세 분석 화면이 표시됩니다.
+            """
+        )
+
+        fig_map, map_df = make_page1_map(
+            selected_metric=selected_metric,
+            selected_country=None,
+            height=760,
+        )
+
+        map_event = st.plotly_chart(
+            fig_map,
+            use_container_width=True,
+            on_select="rerun",
+            selection_mode="points",
+            key=(
+                "page1_big_map_"
+                f"{year}_"
+                f"{selected_metric}_"
+                f"{st.session_state.map_version}"
+            ),
+            config={
+                "displayModeBar": True,
+                "scrollZoom": False,
+            },
+        )
+
+        clicked_country = (
+            get_clicked_country_from_map(
+                map_event,
+                map_df,
+            )
+        )
+
+        sync_clicked_country(
+            clicked_country
+        )
+
+    # ---------------------------------------------
+    # 국가 선택: 2 x 2 상세화면
+    # ---------------------------------------------
+
+    else:
+
+        st.subheader(
+            f"📍 선택 국가 : {chosen_name}"
+        )
+
+        top_left, top_right = (
+            st.columns(
+                [1.25, 1]
+            )
+        )
+
+        with top_left:
+
+            st.markdown(
+                f"### 🌍 "
+                f"{selected_metric} 세계지도"
+            )
+
+            fig_map, map_df = make_page1_map(
+                selected_metric=selected_metric,
+                selected_country=chosen_name,
+                height=430,
+            )
+
+            map_event = st.plotly_chart(
+                fig_map,
+                use_container_width=True,
+                on_select="rerun",
+                selection_mode="points",
+                key=(
+                    "page1_small_map_"
+                    f"{year}_"
+                    f"{selected_metric}_"
+                    f"{chosen_name}_"
+                    f"{st.session_state.map_version}"
+                ),
+                config={
+                    "displayModeBar": False,
+                    "scrollZoom": False,
+                },
+            )
+
+            clicked_country = (
+                get_clicked_country_from_map(
+                    map_event,
+                    map_df,
+                )
+            )
+
+            sync_clicked_country(
+                clicked_country
+            )
+
+        with top_right:
+
+            st.markdown(
+                f"### 📊 {year}년 "
+                "TIV 수입 점유율 Top10"
+            )
+
+            tiv_top10 = df[
+                (df["Year"] == year)
+                &
+                (
+                    df["TIV_5Y_Share"]
+                    .notna()
+                )
+            ].copy()
+
+            tiv_top10 = (
+                tiv_top10.groupby(
+                    ["Country", "Iso3"],
+                    as_index=False,
+                )["TIV_5Y_Share"]
+                .mean()
+                .sort_values(
+                    "TIV_5Y_Share",
+                    ascending=False,
+                )
+                .head(10)
+            )
+
+            tiv_top10_plot = (
+                tiv_top10.sort_values(
+                    "TIV_5Y_Share",
+                    ascending=True,
+                )
+            )
+
+            fig_tiv = px.bar(
+                tiv_top10_plot,
+                x="TIV_5Y_Share",
+                y="Country",
+                orientation="h",
+                text="TIV_5Y_Share",
+                labels={
+                    "TIV_5Y_Share":
+                        "TIV 수입 점유율 (%)",
+                    "Country":
+                        "",
+                },
+            )
+
+            fig_tiv.update_traces(
+                texttemplate="%{x:.2f}%",
+                textposition="outside",
+                hovertemplate=(
+                    "<b>%{y}</b><br>"
+                    "TIV 수입 점유율: "
+                    "%{x:.2f}%"
+                    "<extra></extra>"
+                ),
+            )
+
+            fig_tiv.update_layout(
+                height=430,
+                showlegend=False,
+                yaxis_title="",
+                xaxis_title=(
+                    "TIV 수입 점유율 (%)"
+                ),
+                margin=dict(
+                    l=10,
+                    r=80,
+                    t=20,
+                    b=40,
+                ),
+            )
+
+            st.plotly_chart(
+                fig_tiv,
+                use_container_width=True,
+                key=f"page1_tiv_top10_{year}",
+            )
+
+        st.divider()
+
+        bottom_left, bottom_right = (
+            st.columns(2)
+        )
+
+        with bottom_left:
+
+            st.markdown(
+                f"### 📈 {chosen_name} - "
+                f"{selected_metric} 추이"
+            )
+
+            st.plotly_chart(
+                make_page1_line(
+                    chosen_name,
+                    selected_metric,
+                ),
+                use_container_width=True,
+                key=(
+                    "page1_line_"
+                    f"{chosen_name}_"
+                    f"{selected_metric}"
+                ),
+            )
+
+        with bottom_right:
+
+            st.markdown(
+                f"### 🎯 {chosen_name} "
+                "방산시장 상대지표"
+            )
+
+            st.plotly_chart(
+                make_page1_radar(
+                    chosen_name
+                ),
+                use_container_width=True,
+                key=(
+                    "page1_radar_"
+                    f"{chosen_name}_"
+                    f"{year}"
+                ),
+            )
+
+
+# =========================================================
+# 13. 2페이지
+# =========================================================
+
+else:
+
+    st.title(
+        "수출 유망국 탐색 — 복합지표"
+    )
+
+    st.caption(
+        "GDP 대비 군사비를 기준으로 "
+        "분쟁위험도와 무기 수입 실적을 함께 확인합니다. "
+        "버블을 클릭하면 선택 국가가 공통 사이드바와 "
+        "1페이지에도 함께 반영됩니다."
+    )
+
+    # 두 번째 페이지만 사용하는 옵션이므로
+    # 공통 사이드바가 아니라 본문에 배치
+    size_col = st.radio(
+        "버블 크기",
+        options=[
+            "gdp_calculated",
+            "current_usd",
+        ],
+        format_func=lambda x: {
+            "gdp_calculated": "GDP",
+            "current_usd": "군사비",
+        }[x],
+        horizontal=True,
+        key="page2_size_col",
+    )
+
+    # -----------------------------------------------------
+    # 유사도 기준 차트 상태
+    # -----------------------------------------------------
+
+    if "sim_basis" not in st.session_state:
+        st.session_state.sim_basis = "risk"
+
+    if st.session_state.get("page2_last_year") != year:
+        st.session_state.page2_last_year = year
+        st.session_state.pop("last_click_risk", None)
+        st.session_state.pop("last_click_tiv", None)
+
+    if year < RISK_START:
+        st.session_state.sim_basis = "tiv"
+        st.info(
+            f"분쟁위험도는 {RISK_START}년부터 제공됩니다. "
+            "선택한 연도에서는 TIV 차트를 확인하세요."
+        )
+
+    sim_basis = st.session_state.sim_basis
+
+    # 버블차트에 유사 국가를 표시해야 하므로 먼저 계산
+    sim_table = None
+    sim_other = None
+
+    if sel_iso:
+        sim_table, sim_other = find_similar_countries(
+            df,
+            year,
+            sim_basis,
+            sel_iso,
+        )
+
+    similar_isos = (
+        []
+        if sim_table is None
+        else sim_table["Iso3"].tolist()
+    )
+
+    # -----------------------------------------------------
+    # 버블차트 + 시계열 (2행)
+    # -----------------------------------------------------
+
+    for metric in [
+        "risk",
+        "tiv",
+    ]:
+
+        left, right = st.columns(2)
+
+        with left:
+
+            bubble_event = st.plotly_chart(
+                make_bubble(
+                    df,
+                    year,
+                    metric,
+                    size_col=size_col,
+                    highlight=sel_iso,
+                    similar=(
+                        similar_isos
+                        if metric == sim_basis
+                        else None
+                    ),
+                ),
+                use_container_width=True,
+                on_select="rerun",
+                selection_mode="points",
+                key=(
+                    "page2_bubble_"
+                    f"{metric}_{year}_{size_col}"
+                ),
+            )
+
+            point = extract_selected_point(
+                bubble_event
+            )
+
+            clicked_iso = None
+
+            if point is not None:
+                try:
+                    customdata = point.get(
+                        "customdata"
+                    )
+                    clicked_iso = (
+                        customdata[1]
+                        if customdata
+                        else None
+                    )
+                except Exception:
+                    clicked_iso = None
+
+            if clicked_iso:
+                is_new_click = (
+                    st.session_state.get(
+                        f"last_click_{metric}"
+                    )
+                    != clicked_iso
+                )
+
+                if is_new_click:
+                    st.session_state[
+                        f"last_click_{metric}"
+                    ] = clicked_iso
+
+                    basis_changed = (
+                        st.session_state.sim_basis
+                        != metric
+                    )
+
+                    if (
+                        metric == "tiv"
+                        or year >= RISK_START
+                    ):
+                        st.session_state.sim_basis = metric
+
+                    clicked_name = ISO_TO_NAME.get(
+                        clicked_iso
+                    )
+
+                    if (
+                        clicked_name
+                        == st.session_state.sel_country
+                    ):
+                        if basis_changed:
+                            st.rerun()
+                    else:
+                        sync_clicked_country(
+                            clicked_name
+                        )
+
+        with right:
+
+            if sel_iso:
+
+                st.plotly_chart(
+                    make_page2_line(
+                        df,
+                        sel_iso,
+                        metric,
+                    ),
+                    use_container_width=True,
+                    key=(
+                        "page2_line_"
+                        f"{metric}_"
+                        f"{sel_iso}"
+                    ),
+                )
+
+            else:
+
+                st.plotly_chart(
+                    empty_figure(
+                        "버블을 클릭하거나 "
+                        "사이드바에서 국가를 선택하세요."
+                    ),
+                    use_container_width=True,
+                    key=(
+                        "page2_empty_"
+                        f"{metric}"
+                    ),
+                )
+
+    st.divider()
+
+    # -----------------------------------------------------
+    # 유사 국가 비교 + 상관관계 히트맵 (3행)
+    # -----------------------------------------------------
+
+    sim_left, sim_right = st.columns([1.15, 1])
+
+    with sim_left:
+
+        basis_label = PAGE2_METRIC[
+            sim_basis
+        ]["label"]
+
+        st.markdown(
+            f"#### 유사 국가 비교 "
+            f"(상위 {SIM_TOP_N}개)"
+        )
+
+        st.caption(
+            f"기준 차트 : **{basis_label}** 버블차트 · "
+            "GDP 대비 군사비 · 기준지표 · GDP "
+            "3개 축을 z-표준화한 유클리드 거리 기준 · "
+            "거리 1 = 표준편차 1개만큼 떨어짐"
+        )
+
+        if not sel_iso:
+            st.info(
+                "버블차트에서 국가를 클릭하면 "
+                "가장 가까운 국가들이 표시됩니다."
+            )
+
+        elif sim_table is None or sim_table.empty:
+            st.warning(
+                f"{year}년 {basis_label} 기준으로 "
+                f"{chosen_name}의 좌표를 계산할 수 없습니다."
+            )
+
+        else:
+            m = PAGE2_METRIC[sim_basis]
+            o = PAGE2_METRIC[sim_other]
+
+            show = pd.DataFrame(
+                {
+                    "순위": sim_table["순위"],
+                    "국가": sim_table["Country"],
+                    "유사도(%)": sim_table["유사도"],
+                    "거리": sim_table["_dist"],
+                    "군사비/GDP(%)": sim_table[X_COL],
+                    m["label"]: sim_table[m["col"]],
+                    o["label"]: sim_table[o["col"]],
+                }
+            )
+
+            st.dataframe(
+                show,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "순위": st.column_config.NumberColumn(
+                        width="small",
+                    ),
+                    "유사도(%)": st.column_config.ProgressColumn(
+                        format="%.1f",
+                        min_value=0,
+                        max_value=100,
+                    ),
+                    "거리": st.column_config.NumberColumn(
+                        format="%.2f",
+                        help=(
+                            "표준화 유클리드 거리. "
+                            "1 = 표준편차 1개만큼 떨어짐"
+                        ),
+                    ),
+                    "군사비/GDP(%)": st.column_config.NumberColumn(
+                        format="%.2f",
+                    ),
+                    m["label"]: st.column_config.NumberColumn(
+                        format=f"%{m['fmt']}",
+                    ),
+                    o["label"]: st.column_config.NumberColumn(
+                        format=f"%{o['fmt']}",
+                        help="기준 차트에 없는 반대쪽 지표",
+                    ),
+                },
+            )
+
+            st.caption(
+                f"주황색 테두리 버블이 위 {len(show)}개 국가, "
+                f"빨간 테두리가 선택 국가입니다."
+                f"기준 차트({basis_label})에만 표시됩니다."
+            )
+
+    with sim_right:
+
+        st.markdown(
+            "#### 주요 지표 간 상관관계"
+        )
+
+        corr_method = st.radio(
+            "상관계수",
+            options=[
+                "spearman",
+                "pearson",
+            ],
+            format_func=lambda x: {
+                "spearman": "스피어만(순위)",
+                "pearson": "피어슨(로그변환)",
+            }[x],
+            horizontal=True,
+            key="page2_corr_method",
+            label_visibility="collapsed",
+        )
+
+        fig_corr, corr_n = make_corr_heatmap(
+            df,
+            year,
+            method=corr_method,
+        )
+
+        st.plotly_chart(
+            fig_corr,
+            use_container_width=True,
+            key=(
+                "page2_corr_"
+                f"{year}_{corr_method}"
+            ),
+        )
+
+        if year < RISK_START:
+            st.caption(
+                f"{year}년은 분쟁위험도가 없어 "
+                "해당 지표는 제외했습니다."
+            )
+
+    st.caption(
+        "TIV(Trend Indicator Value)는 SIPRI가 "
+        "무기의 군사적 능력을 지수화한 값으로 "
+        "실제 거래 금액이 아닙니다. "
+        "분쟁위험도는 UN INFORM Human Hazard 지수이며 "
+        f"{RISK_START}년부터 제공됩니다."
+    )
