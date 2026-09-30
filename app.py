@@ -11,6 +11,28 @@ import pycountry
 import streamlit as st
 
 
+
+from sqlalchemy import create_engine
+
+# Streamlit Secrets에서 db_url 읽어오기
+db_url = st.secrets["mysql"]["db_url"]
+
+# SQLAlchemy 엔진 생성 (연결 캐싱 처리)
+@st.cache_resource
+def get_db_engine():
+    return create_engine(db_url)
+
+engine = get_db_engine()
+
+# 데이터베이스에서 데이터 가져오는 함수 예시
+@st.cache_data(ttl=600)
+def load_data_from_db(query):
+    with engine.connect() as conn:
+        df = pd.read_sql(query, conn)
+    return df
+
+# 사용 예시: 원하는 테이블 이름이나 SQL 쿼리 입력
+# df = load_data_from_db("SELECT * FROM your_table_name LIMIT 100")
 # ============================================================
 # 0. 기본 설정
 # ============================================================
