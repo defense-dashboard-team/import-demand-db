@@ -44,8 +44,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-'''DATA_PATH = "Integrate_new.csv"
-'''
+
 @st.cache_resource
 def get_db_engine():
     db_url = st.secrets["mysql"]["db_url"]
@@ -699,94 +698,7 @@ except Exception as error:
 
 
 
-'''
-@st.cache_data
-def load_data(path):
-    path = Path(path)
 
-    if not path.exists():
-        raise FileNotFoundError(f"{path} 파일을 찾을 수 없습니다.")
-
-    try:
-        data = pd.read_csv(path, encoding="utf-8-sig")
-    except UnicodeDecodeError:
-        data = pd.read_csv(path, encoding="cp949")
-
-    def find_col(candidates):
-        for candidate in candidates:
-            if candidate in data.columns:
-                return candidate
-        raise KeyError(f"필요한 컬럼을 찾지 못했습니다: {candidates}")
-
-    COL = {
-        "country": find_col(["Country", "country", "Recipient"]),
-        "iso3": find_col(["Iso3", "ISO3", "iso3", "Country_Code", "country_code"]),
-        "year": find_col(["Year", "year", "Delivery year"]),
-        "gdp": find_col(["gdp_calculated", "GDP", "NY.GDP.MKTP.CD"]),
-        "military": find_col(["current_usd", "Military_Expenditure", "military_expenditure"]),
-        "share_gdp": find_col(["share_gdp", "Share_GDP"]),
-        "tiv": find_col(["TIV_5Y_Share", "tiv_5y_share"]),
-        "risk": find_col(["human_hazard_score", "Indicator Score", "indicator_score"]),
-    }
-
-    numeric_cols = [
-        COL["year"],
-        COL["gdp"],
-        COL["military"],
-        COL["share_gdp"],
-        COL["tiv"],
-        COL["risk"],
-    ]
-
-    for col in numeric_cols:
-        data[col] = (
-            data[col]
-            .astype(str)
-            .str.replace(",", "", regex=False)
-            .str.replace("%", "", regex=False)
-            .str.strip()
-        )
-        data[col] = pd.to_numeric(data[col], errors="coerce")
-
-    data = data.dropna(
-        subset=[COL["country"], COL["iso3"], COL["year"]]
-    )
-
-    data[COL["country"]] = data[COL["country"]].astype(str).str.strip()
-    data[COL["iso3"]] = data[COL["iso3"]].astype(str).str.upper().str.strip()
-    data[COL["year"]] = data[COL["year"]].astype(int)
-
-    data = (
-        data.groupby(
-            [COL["country"], COL["iso3"], COL["year"]],
-            as_index=False,
-        )
-        .agg({
-            COL["gdp"]: "mean",
-            COL["military"]: "mean",
-            COL["share_gdp"]: "mean",
-            COL["tiv"]: "mean",
-            COL["risk"]: "mean",
-        })
-    )
-
-    share_values = data[COL["share_gdp"]].dropna()
-    if not share_values.empty and share_values.max() <= 1:
-        data[COL["share_gdp"]] *= 100
-
-    tiv_values = data[COL["tiv"]].dropna()
-    if not tiv_values.empty and tiv_values.max() <= 1:
-        data[COL["tiv"]] *= 100
-
-    return data, COL
-
-
-try:
-    df, COL = load_data(DATA_PATH)
-except Exception as error:
-    st.error(str(error))
-    st.stop()
-'''
 
 # ============================================================
 # 3. 보조 함수
