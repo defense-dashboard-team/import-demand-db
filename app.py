@@ -5674,6 +5674,7 @@ def render_page1():
             # 사용자가 움직인 지도 위치/줌을 최대한 유지
             uirevision=f"global-map-{selected_year}-{selected_iso or 'world'}",
         )
+        )
 
 
         # ========================================================
