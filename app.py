@@ -156,6 +156,54 @@ def country_view_bounds(iso):
     return None
 
 
+def lock_single_world_script():
+    """
+    지도가 좌우로 반복(world copy)되지 않게 하고 세계 한 장 안에서만 움직이게 합니다.
+    plotly 레이아웃 옵션 대신 MapLibre 지도 객체를 직접 설정하므로
+    plotly 버전과 상관없이 지도 자체는 항상 그려집니다.
+    """
+    components.html(
+        """
+        <script>
+        (function () {
+            const doc = window.parent.document;
+            let tries = 0;
+
+            function findMap() {
+                const plots = doc.querySelectorAll('.js-plotly-plot');
+                for (const gd of plots) {
+                    const fl = gd._fullLayout;
+                    if (!fl) continue;
+                    const sub = fl.map || fl.mapbox;
+                    if (sub && sub._subplot && sub._subplot.map) {
+                        return sub._subplot.map;
+                    }
+                }
+                return null;
+            }
+
+            function lock() {
+                const map = findMap();
+                if (!map) {
+                    if (++tries < 40) setTimeout(lock, 150);
+                    return;
+                }
+                try {
+                    map.setRenderWorldCopies(false);   // 세계 복제 끄기
+                    map.setMaxBounds([[-180, -85], [180, 85]]);  // 세계 밖으로 못 밀게
+                } catch (e) {
+                    console.warn('map lock failed', e);
+                }
+            }
+
+            setTimeout(lock, 300);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def zoom_to_country_script(iso):
     """
     선택한 국가로 부드럽게 줌인하는 애니메이션.
@@ -5866,21 +5914,11 @@ def render_page1():
 
                 center=dict(
                     lat=12,
-                    lon=0,
+                    lon=5,
                 ),
 
-                # 이동/줌 가능한 범위를 세계 한 장으로 제한
-                # (이 값이 없으면 MapLibre가 세계를 좌우로 계속 복제해 보여줍니다)
-                # south=-58 : 남극 대륙 제외 / north=80 : 북극해 일부 제외
-                bounds=dict(
-                    west=-180,
-                    east=180,
-                    south=-58,
-                    north=80,
-                ),
-
-                # 처음엔 작게 두면 bounds가 "세계가 꽉 차는 최소 줌"으로 자동 보정합니다
-                zoom=0.5,
+                # 세계가 카드 너비를 거의 채우도록 설정
+                zoom=0.72,
 
                 pitch=0,
 
@@ -6329,6 +6367,10 @@ def render_page1():
                                     # 제목 오른쪽의 현재 선택 국가를 즉시 갱신
                                     sync_clicked_country(clicked_name)
                                     st.rerun()
+
+
+                    # 지도가 새로 그려질 때마다 세계 한 장으로 고정
+                    lock_single_world_script()
 
 
                     # =============================================
