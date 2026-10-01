@@ -35,6 +35,17 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+# 지도를 그리는 파이썬 코드 아래에 다음과 같이 update_geos() 옵션을 적용합니다.
+fig.update_geos(
+    lataxis_range=[-60, 90],     # 위도 범위 제한 (남극~북극)
+    lonaxis_range=[-180, 180],   # 경도 범위 제한 (세계 지도 1회 분량으로 고정)
+    projection_type="natural earth" # 또는 "equirectangular", "mercator"
+)
+
+# 지도 이동 범위(Pan) 및 래핑 방지 옵션 적용
+fig.update_layout(
+    margin={"r":0, "t":30, "l":0, "b":0}
+)
 
 DATA_PATH = "Integrate_new.csv"
 
