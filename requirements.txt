@@ -1,3 +1,4 @@
+# dashboard (app.py, app5.py, app_1page.py)
 streamlit
 pandas
 numpy
@@ -6,3 +7,14 @@ pymysql
 sqlalchemy
 pycountry
 babel
+scipy
+cryptography
+
+# notebooks
+matplotlib
+seaborn
+statsmodels
+ipykernel
+
+# preprocessing (reads .xlsx source files)
+openpyxl
