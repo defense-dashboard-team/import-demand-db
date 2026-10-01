@@ -35,17 +35,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-# 지도를 그리는 파이썬 코드 아래에 다음과 같이 update_geos() 옵션을 적용합니다.
-fig.update_geos(
-    lataxis_range=[-60, 90],     # 위도 범위 제한 (남극~북극)
-    lonaxis_range=[-180, 180],   # 경도 범위 제한 (세계 지도 1회 분량으로 고정)
-    projection_type="natural earth" # 또는 "equirectangular", "mercator"
-)
-
-# 지도 이동 범위(Pan) 및 래핑 방지 옵션 적용
-fig.update_layout(
-    margin={"r":0, "t":30, "l":0, "b":0}
-)
 
 DATA_PATH = "Integrate_new.csv"
 
@@ -103,6 +92,133 @@ def world_geojson_subset(ids):
             if feature.get("id") in keep
         ],
     }
+
+def _ring_area(ring):
+    """경위도 좌표 링의 대략적인 면적 (크기 비교용)."""
+    area = 0.0
+    for (x1, y1, *_), (x2, y2, *_) in zip(ring, ring[1:]):
+        area += x1 * y2 - x2 * y1
+    return abs(area) / 2
+
+
+@st.cache_data
+def country_view_bounds(iso):
+    """
+    선택 국가가 화면에 들어오도록 줌인할 영역 (west, south, east, north).
+
+    본토에서 멀리 떨어진 해외 영토(프랑스령 기아나, 알래스카 등)와
+    날짜변경선에 걸친 조각 때문에 영역이 세계 전체로 커지지 않도록
+    "가장 큰 땅덩어리의 25% 이상"인 조각만 포함합니다.
+    """
+    geojson, _ = load_world_geojson()
+
+    for feature in geojson.get("features", []):
+
+        if feature.get("id") != iso:
+            continue
+
+        geometry = feature.get("geometry") or {}
+
+        if geometry.get("type") == "Polygon":
+            polygons = [geometry["coordinates"]]
+        elif geometry.get("type") == "MultiPolygon":
+            polygons = geometry["coordinates"]
+        else:
+            return None
+
+        parts = [
+            (_ring_area(poly[0]), poly[0])
+            for poly in polygons
+            if poly and poly[0]
+        ]
+
+        if not parts:
+            return None
+
+        biggest = max(area for area, _ in parts)
+        keep = [ring for area, ring in parts if area >= biggest * 0.25]
+
+        def extent(rings):
+            lons = [pt[0] for ring in rings for pt in ring]
+            lats = [pt[1] for ring in rings for pt in ring]
+            return min(lons), min(lats), max(lons), max(lats)
+
+        west, south, east, north = extent(keep)
+
+        # 날짜변경선(±180°)에 걸쳐 영역이 비정상적으로 넓어지면 가장 큰 조각만 사용
+        if east - west > 180:
+            west, south, east, north = extent(
+                [max(parts, key=lambda p: p[0])[1]]
+            )
+
+        return west, south, east, north
+
+    return None
+
+
+def zoom_to_country_script(iso):
+    """
+    선택한 국가로 부드럽게 줌인하는 애니메이션.
+
+    Plotly는 파이썬에서 center/zoom을 바꾸면 애니메이션 없이 순간이동하므로,
+    브라우저에 이미 그려진 MapLibre 지도 객체를 찾아 fitBounds로 이동시킵니다.
+    (scroll_to_top_script와 같은 방식으로 parent 문서에 접근)
+    """
+    bounds = country_view_bounds(iso)
+
+    if not bounds:
+        return
+
+    west, south, east, north = bounds
+
+    components.html(
+        """
+        <script>
+        (function () {
+            const bounds = [[__WEST__, __SOUTH__], [__EAST__, __NORTH__]];
+            const doc = window.parent.document;
+            let tries = 0;
+
+            function findMap() {
+                const plots = doc.querySelectorAll('.js-plotly-plot');
+                for (const gd of plots) {
+                    const fl = gd._fullLayout;
+                    if (!fl) continue;
+                    const sub = fl.map || fl.mapbox;
+                    if (sub && sub._subplot && sub._subplot.map) {
+                        return sub._subplot.map;
+                    }
+                }
+                return null;
+            }
+
+            function fly() {
+                const map = findMap();
+                if (!map) {
+                    if (++tries < 40) setTimeout(fly, 150);
+                    return;
+                }
+                map.fitBounds(bounds, {
+                    padding: { top: 40, bottom: 40, left: 60, right: 60 },
+                    maxZoom: 6,         // 작은 나라에서 과하게 확대되지 않도록
+                    duration: 1400,     // 애니메이션 시간(ms)
+                    linear: true,       // true: 부드러운 줌인 / 지우면 날아가듯 이동
+                    essential: true,
+                });
+            }
+
+            // 새 그림이 화면에 반영된 뒤 실행 (너무 빠르면 중간에 끊김)
+            setTimeout(fly, 400);
+        })();
+        </script>
+        """
+        .replace("__WEST__", str(west))
+        .replace("__SOUTH__", str(south))
+        .replace("__EAST__", str(east))
+        .replace("__NORTH__", str(north)),
+        height=0,
+    )
+
 
 TOP_PANEL_HEIGHT = 540
 BOTTOM_PANEL_HEIGHT = 445
@@ -5750,11 +5866,21 @@ def render_page1():
 
                 center=dict(
                     lat=12,
-                    lon=5,
+                    lon=0,
                 ),
 
-                # 세계가 카드 너비를 거의 채우도록 설정
-                zoom=0.72,
+                # 이동/줌 가능한 범위를 세계 한 장으로 제한
+                # (이 값이 없으면 MapLibre가 세계를 좌우로 계속 복제해 보여줍니다)
+                # south=-58 : 남극 대륙 제외 / north=80 : 북극해 일부 제외
+                bounds=dict(
+                    west=-180,
+                    east=180,
+                    south=-58,
+                    north=80,
+                ),
+
+                # 처음엔 작게 두면 bounds가 "세계가 꽉 차는 최소 줌"으로 자동 보정합니다
+                zoom=0.5,
 
                 pitch=0,
 
@@ -6203,6 +6329,32 @@ def render_page1():
                                     # 제목 오른쪽의 현재 선택 국가를 즉시 갱신
                                     sync_clicked_country(clicked_name)
                                     st.rerun()
+
+
+                    # =============================================
+                    # 국가가 바뀐 경우에만 줌인 애니메이션 실행
+                    # (첫 화면 로드 때는 움직이지 않고 기준값만 저장)
+                    # =============================================
+
+                    _FLY_UNSET = "__unset__"
+
+                    _fly_iso = st.session_state.get(
+                        "selected_country_iso"
+                    )
+
+                    _fly_prev = st.session_state.get(
+                        "map_fly_last_iso",
+                        _FLY_UNSET,
+                    )
+
+                    if _fly_iso != _fly_prev:
+
+                        st.session_state[
+                            "map_fly_last_iso"
+                        ] = _fly_iso
+
+                        if _fly_prev != _FLY_UNSET and _fly_iso:
+                            zoom_to_country_script(_fly_iso)
 
 
                 # ------------------------------------------------
