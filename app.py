@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
 import pycountry
 import streamlit as st
@@ -185,7 +186,7 @@ footer {
     margin-right: -0.7rem;
     margin-bottom: 10px;
 
-    height: 120px;
+    height: 104px;
 
     padding: 0 48px;
 
@@ -209,16 +210,16 @@ footer {
 }
 
 .main-title {
-    font-size: 42px;
-    font-weight: 900;
+    font-size: 36px;
+    font-weight: 800;
     line-height: 1.05;
     letter-spacing: -1.5px;
     margin-bottom: 8px;
 }
 
 .main-subtitle {
-    font-size: 19px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 500;
     opacity: 0.96;
 }
 
@@ -1025,6 +1026,327 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 </style>
 """)
 
+# ============================================================
+# 1-1. 디자인 정리 레이어
+#  - 흰 카드 한 겹 + 옅은 그림자, 테두리 최소화
+#  - Pretendard 글꼴, 글자 굵기 단계 통일
+#  - 1·2·3페이지 제목 / KPI 카드 모양 통일
+# ============================================================
+
+st.html("""
+<style>
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+:root {
+    --ui-font: "Pretendard Variable", Pretendard, -apple-system,
+        "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    --ink: #0F172A;
+    --ink-2: #334155;
+    --muted: #64748B;
+    --line: #E6ECF3;
+    --bg: #F3F6FA;
+    --card: #FFFFFF;
+    --primary: #2563EB;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+              0 4px 14px rgba(15, 23, 42, 0.05);
+}
+
+/* ---------- 글꼴 / 바탕 ---------- */
+
+.stApp,
+.stApp p,
+.stApp div,
+.stApp label,
+.stApp button,
+.stApp input,
+.stApp th,
+.stApp td,
+.stApp span:not([data-testid="stIconMaterial"]) {
+    font-family: var(--ui-font) !important;
+}
+
+.stApp {
+    background: var(--bg) !important;
+}
+
+/* 화면 맨 위로 올리는 0px 스크립트가 위쪽 틈(16px)을 만들지 않도록
+   (스크립트는 숨겨도 그대로 실행됩니다) */
+[data-testid="stElementContainer"]:has(iframe[height="0"]),
+[data-testid="stElementContainer"]:has(> iframe[srcdoc]) {
+    display: none !important;
+}
+
+/* ---------- 카드 (테두리 있는 패널 → 흰 카드 한 겹) ---------- */
+
+.stApp [class*="st-key-card_"] {
+    background: var(--card) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow);
+    padding: 18px 20px !important;
+}
+
+/* 1페이지 지도+TOP10을 감싸던 바깥 상자는 상자 없이 */
+.stApp .st-key-plain_p1_outer {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* 같은 줄에 나란히 놓인 카드는 높이를 똑같이 (짧은 카드가 늘어남) */
+[data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+    > [data-testid="stLayoutWrapper"]:only-child:has(> [class*="st-key-card_"]) {
+    flex: 1 1 auto;
+}
+
+[data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+    > [data-testid="stLayoutWrapper"]:only-child > [class*="st-key-card_"] {
+    flex: 1 1 auto;
+}
+
+/* ---------- 1페이지 지표 선택 (세그먼트 버튼) ---------- */
+
+.stApp [data-testid="stButtonGroup"] button {
+    border-color: var(--line) !important;
+    background: var(--card) !important;
+    color: var(--ink-2) !important;
+    font-weight: 500 !important;
+}
+
+.stApp [data-testid="stButtonGroup"] button[aria-checked="true"] {
+    background: var(--primary) !important;
+    border-color: var(--primary) !important;
+    color: #FFFFFF !important;
+    font-weight: 600 !important;
+}
+
+.stApp [data-testid="stButtonGroup"] button[aria-checked="true"] * {
+    color: #FFFFFF !important;
+}
+
+/* 라디오 선택 점 : Streamlit 기본 빨강 → 파랑 */
+.stApp [data-testid="stRadio"] label:has(input:checked) > div > div:first-child {
+    background: var(--primary) !important;
+    border-color: var(--primary) !important;
+}
+
+/* ---------- 제목 / 본문 글자 ---------- */
+
+.stApp .page-title,
+.stApp .page-main-title {
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+    letter-spacing: -0.4px !important;
+}
+
+.stApp .page-title {
+    margin-top: 22px !important;
+    margin-bottom: 10px !important;
+}
+
+.stApp .panel-title,
+.stApp .panel-title-inline,
+.stApp .chart-title {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+    letter-spacing: -0.2px !important;
+}
+
+.stApp .panel-note,
+.stApp .panel-caption,
+.stApp .chart-subtitle {
+    color: var(--muted) !important;
+}
+
+/* ---------- KPI 카드 (1·2페이지 같은 모양) ---------- */
+
+.stApp .kpi-card,
+.stApp .p1-kpi-card {
+    background: var(--card) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.stApp .kpi-label {
+    color: var(--muted) !important;
+    font-weight: 600 !important;
+}
+
+.stApp .kpi-value,
+.stApp .p1-kpi-value {
+    font-weight: 700 !important;
+    letter-spacing: -0.5px !important;
+}
+
+.stApp .country-name {
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+}
+
+/* 2페이지 KPI : 1페이지처럼 왼쪽 동그란 아이콘 */
+.stApp .kpi-has-icon {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    container-type: inline-size;
+}
+
+/* 카드가 좁으면 (작은 화면) 아이콘을 숨겨 글자 자리를 확보 */
+@container (max-width: 220px) {
+    .stApp .kpi-icon2 {
+        display: none !important;
+    }
+}
+
+.stApp .kpi-icon2 {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #EEF4FF;
+    font-size: 21px;
+}
+
+.stApp .kpi-text {
+    flex: 1;
+    min-width: 0;
+}
+
+/* KPI 수치 색 통일 (증감 색으로 방향을 보여주므로 수치는 차분한 남색) */
+.stApp .kpi-lg .kpi-value {
+    color: #0F2A4A !important;
+}
+
+/* ---------- 유사 국가 표 ---------- */
+
+.stApp .similarity-table {
+    border: 1px solid var(--line) !important;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.stApp .similarity-table thead th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: #F5F8FC !important;
+    color: var(--muted) !important;
+    font-weight: 600 !important;
+    border-color: var(--line) !important;
+}
+
+.stApp .similarity-table tbody td {
+    font-weight: 500 !important;
+    color: var(--ink-2) !important;
+    border-color: #EEF2F7 !important;
+}
+
+.stApp .similarity-table .sim-country {
+    font-weight: 600 !important;
+    color: var(--ink) !important;
+}
+
+.stApp .similarity-table tbody tr.sim-base-row td {
+    background: #F1F6FE !important;
+    border-bottom: 1px solid #D6E4FA !important;
+}
+
+/* ---------- 2페이지 작은 차트 제목 버튼 → 글자 제목 ---------- */
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: 26px !important;
+    padding: 0 2px !important;
+    justify-content: flex-start !important;
+    color: var(--ink-2) !important;
+}
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button > div,
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button > div > span {
+    justify-content: flex-start !important;
+}
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button * {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    text-align: left !important;
+}
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button:hover,
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button:hover * {
+    color: var(--primary) !important;
+}
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button p::after {
+    content: "  ↗";
+    color: #94A3B8;
+}
+
+/* ---------- 사이드바 ---------- */
+
+section[data-testid="stSidebar"] {
+    background: #0E2440 !important;
+}
+
+section[data-testid="stSidebar"] h3 {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.4px;
+    color: rgba(255, 255, 255, 0.55) !important;
+}
+
+section[data-testid="stSidebar"] div.stButton > button {
+    min-height: 44px !important;
+    border-radius: 10px !important;
+    border: none !important;
+    justify-content: flex-start !important;
+    padding-left: 14px !important;
+}
+
+section[data-testid="stSidebar"] div.stButton > button * {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+}
+
+section[data-testid="stSidebar"] div.stButton > button > div,
+section[data-testid="stSidebar"] div.stButton > button [data-testid="stMarkdownContainer"] {
+    width: 100%;
+    justify-content: flex-start !important;
+    text-align: left !important;
+}
+
+section[data-testid="stSidebar"] button[kind="secondary"] {
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.72) !important;
+}
+
+section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    background: rgba(255, 255, 255, 0.07) !important;
+    color: #FFFFFF !important;
+}
+
+section[data-testid="stSidebar"] button[kind="primary"] {
+    background: rgba(96, 165, 250, 0.18) !important;
+    color: #FFFFFF !important;
+    box-shadow: inset 3px 0 0 #60A5FA;
+}
+
+section[data-testid="stSidebar"] .sidebar-divider {
+    border-top-color: rgba(255, 255, 255, 0.10) !important;
+}
+</style>
+""")
+
+
 
 # ============================================================
 # 2. 데이터 로드
@@ -1206,10 +1528,45 @@ COUNTRY_DISPLAY_FIX = {
 }
 
 
-def country_display(name):
-    """화면 표시용 국가명 (데이터 원본 값은 그대로 두고 표기만 정리)."""
+KO_LOCALE = Locale.parse("ko")
+
+# babel 한글 국가명이 없거나 어색한 경우 직접 지정 (ISO3 기준)
+KOREAN_NAME_FIX = {
+    "XKX": "코소보",
+}
+
+
+def country_korean(iso3):
+    """ISO3 → 한글 국가명 (1페이지 TOP10과 같은 방식). 없으면 None."""
+    if not iso3:
+        return None
+
+    code = str(iso3).upper().strip()
+
+    if code in KOREAN_NAME_FIX:
+        return KOREAN_NAME_FIX[code]
+
+    alpha2 = iso3_to_iso2(code)
+
+    if alpha2:
+        return KO_LOCALE.territories.get(alpha2.upper())
+
+    return None
+
+
+def country_english(name):
+    """영문 표기 (데이터 원본 값을 읽기 좋게 정리)."""
     name = str(name)
     return COUNTRY_DISPLAY_FIX.get(name, name)
+
+
+def country_display(name):
+    """
+    화면 표시용 국가명 : 한글 (데이터 원본 값은 그대로 두고 표기만 바꿈).
+    한글 이름을 찾지 못하면 영문 표기를 사용합니다.
+    """
+    korean = country_korean(country_to_iso3.get(name))
+    return korean or country_english(name)
 
 
 def get_country_year(country, year):
@@ -1426,6 +1783,43 @@ SIZE_COL = "gdp_calculated"
 MILEX_COL = "current_usd"
 
 NAVY_DEEP = "#0B2545"
+
+# 차트 글꼴 (화면 글꼴 Pretendard와 통일, 없으면 맑은 고딕)
+CHART_FONT = (
+    "Pretendard Variable, Pretendard, "
+    "Malgun Gothic, AppleGothic, NanumGothic, sans-serif"
+)
+
+# 전 차트 공통 템플릿 : 연한 격자 · 회색 축 글자 · 투명 배경 · 흰 툴팁
+# (샘플 대시보드처럼 차트가 카드 위에 가볍게 얹혀 보이도록)
+_clean = go.layout.Template(pio.templates["plotly_white"])
+
+_clean.layout.update(
+    font=dict(family=CHART_FONT, size=12, color="#475569"),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    hoverlabel=dict(
+        bgcolor="white",
+        bordercolor="#E2E8F0",
+        font=dict(family=CHART_FONT, size=12, color="#0F172A"),
+    ),
+    legend=dict(
+        font=dict(size=12, color="#334155"),
+        bgcolor="rgba(0,0,0,0)",
+    ),
+)
+
+for _axis in ["xaxis", "yaxis"]:
+    _clean.layout[_axis].update(
+        gridcolor="#EEF2F6",
+        zerolinecolor="#E2E8F0",
+        linecolor="#E2E8F0",
+        tickfont=dict(color="#64748B"),
+        title=dict(font=dict(size=12, color="#64748B")),
+    )
+
+pio.templates["dash_clean"] = _clean
+pio.templates.default = "dash_clean"
 NAVY = "#13315C"
 BLUE = "#1F6FEB"
 PURPLE = "#6C5CE7"
@@ -1447,9 +1841,9 @@ BUBBLE_MIN = 6
 BUBBLE_MAX = 46
 
 BASE_LAYOUT = dict(
-    template="plotly_white",
+    template="dash_clean",
     font=dict(
-        family="Malgun Gothic, AppleGothic, NanumGothic, sans-serif",
+        family=CHART_FONT,
         size=12,
     ),
     margin=dict(l=60, r=70, t=55, b=55),
@@ -1926,9 +2320,9 @@ def make_corr_heatmap(
         height=height,
         dragmode=False,
         margin=dict(l=62, r=48, t=16, b=62),
-        template="plotly_white",
+        template="dash_clean",
         font=dict(
-            family="Malgun Gothic, AppleGothic, NanumGothic, sans-serif",
+            family=CHART_FONT,
             size=12,
         ),
         hovermode="closest",
@@ -2039,7 +2433,7 @@ def make_bubble(
             mode="markers",
             customdata=np.stack(
                 [
-                    d["Country"],
+                    d["Country"].map(country_display),
                     d["Iso3"],
                     d[SIZE_COL],
                     d[MILEX_COL],
@@ -2333,14 +2727,9 @@ def make_page2_line(
             t=22,
             b=48,
         ),
-        template="plotly_white",
+        template="dash_clean",
         font=dict(
-            family=(
-                "Malgun Gothic, "
-                "AppleGothic, "
-                "NanumGothic, "
-                "sans-serif"
-            ),
+            family=CHART_FONT,
             size=12,
         ),
         hovermode="closest",
@@ -2380,7 +2769,7 @@ TREND_METRICS = {
         "kind": "bar_line",
         "col": "current_usd",
         "sub_col": "share_gdp_pct",
-        "color": NAVY,
+        "color": "#4C74B5",  # 군사비 막대 : 너무 진하지 않은 남청색
         "accent": ORANGE,
         "y_title": "군사비 (백만 USD)",
         "y2_title": "군사비/GDP (%)",
@@ -2703,12 +3092,9 @@ def make_trend_figure(
         )
 
     fig.update_layout(
-        template="plotly_white",
+        template="dash_clean",
         font=dict(
-            family=(
-                "Malgun Gothic, AppleGothic, "
-                "NanumGothic, sans-serif"
-            ),
+            family=CHART_FONT,
             size=12,
         ),
         hovermode="x unified" if not compact else "closest",
@@ -2821,16 +3207,21 @@ with st.sidebar:
         '</div>'
     )
 
+    def search_label(country_name):
+        # 한글 / 영문 어느 쪽으로 입력해도 찾을 수 있게 둘 다 표시
+        return (
+            f"{country_display(country_name)} · "
+            f"{country_english(country_name)} "
+            f"({country_to_iso3.get(country_name, '')})"
+        )
+
     search_options = [
-        f"{country_display(country_name)} "
-        f"({country_to_iso3.get(country_name, '')})"
+        search_label(country_name)
         for country_name in countries
     ]
 
     search_to_country = {
-        f"{country_display(country_name)} "
-        f"({country_to_iso3.get(country_name, '')})":
-            country_name
+        search_label(country_name): country_name
         for country_name in countries
     }
 
@@ -4163,6 +4554,12 @@ def render_page1():
         if int(selected_year) != shared_year:
             st.session_state.selected_year = int(selected_year)
 
+            # 숨은 사이드바 연도 상자도 새 연도로 다시 만들어지게 합니다.
+            # (안 그러면 사이드바 상자가 옛 연도로 되돌리면서
+            #  '다음 페이지' 버튼 클릭이 사라집니다.)
+            st.session_state.year_widget_version += 1
+            st.session_state.map_widget_version += 1
+
 
     # ============================================================
     # 19. 국가-연도 단위 데이터
@@ -4518,7 +4915,8 @@ def render_page1():
     # ============================================================
 
     with st.container(
-        border=True
+        border=True,
+        key="plain_p1_outer",
     ):
 
         # ========================================================
@@ -5341,7 +5739,8 @@ def render_page1():
         with map_area:
 
             with st.container(
-                border=True
+                border=True,
+                key="card_p1_map",
             ):
 
                 current_country_ko = (
@@ -5724,7 +6123,8 @@ def render_page1():
         with top10_area:
 
             with st.container(
-                border=True
+                border=True,
+                key="card_p1_top10",
             ):
 
                 p1_html(
@@ -5858,7 +6258,7 @@ elif st.session_state.app_page == "page3":
 
         with left:
 
-            with st.container(border=True):
+            with st.container(border=True, key=f"card_p3_bubble_{metric}"):
 
                 bubble_title = (
                     "GDP 대비 군사비 × 분쟁위험도"
@@ -6041,7 +6441,7 @@ elif st.session_state.app_page == "page3":
 
         with right:
 
-            with st.container(border=True):
+            with st.container(border=True, key=f"card_p3_line_{metric}"):
 
                 line_other = (
                     "분쟁위험도"
@@ -6125,7 +6525,7 @@ elif st.session_state.app_page == "page3":
 
     with sim_left:
 
-        with st.container(border=True):
+        with st.container(border=True, key="card_p3_sim"):
 
             basis_label = (
                 PAGE2_METRIC[
@@ -6392,7 +6792,7 @@ elif st.session_state.app_page == "page3":
 
     with sim_right:
 
-        with st.container(border=True):
+        with st.container(border=True, key="card_p3_corr"):
 
             corr_method = "spearman"
 
@@ -6523,11 +6923,14 @@ else:
     with c2:
         render_html(
             f"""
-            <div class="kpi-card kpi-lg">
-                <div class="kpi-label">GDP ({selected_year})</div>
-                <div class="kpi-row">
-                    <div class="kpi-value">{money_format(p2_gdp)}</div>
-                    {delta_html(percent_change(p2_gdp, p2_gdp_prev))}
+            <div class="kpi-card kpi-lg kpi-has-icon">
+                <div class="kpi-icon2">💵</div>
+                <div class="kpi-text">
+                        <div class="kpi-label">GDP ({selected_year})</div>
+                        <div class="kpi-row">
+                            <div class="kpi-value">{money_format(p2_gdp)}</div>
+                            {delta_html(percent_change(p2_gdp, p2_gdp_prev))}
+                        </div>
                 </div>
             </div>
             """
@@ -6536,13 +6939,16 @@ else:
     with c3:
         render_html(
             f"""
-            <div class="kpi-card kpi-lg">
-                <div class="kpi-label">군사비 ({selected_year})</div>
-                <div class="kpi-row">
-                    <div class="kpi-value">{money_format(p2_military)}</div>
-                    {delta_html(
-                        percent_change(p2_military, p2_military_prev)
-                    )}
+            <div class="kpi-card kpi-lg kpi-has-icon">
+                <div class="kpi-icon2">🛡️</div>
+                <div class="kpi-text">
+                        <div class="kpi-label">군사비 ({selected_year})</div>
+                        <div class="kpi-row">
+                            <div class="kpi-value">{money_format(p2_military)}</div>
+                            {delta_html(
+                                percent_change(p2_military, p2_military_prev)
+                            )}
+                        </div>
                 </div>
             </div>
             """
@@ -6551,15 +6957,18 @@ else:
     with c4:
         render_html(
             f"""
-            <div class="kpi-card kpi-lg">
-                <div class="kpi-label">
-                    군사비 / GDP ({selected_year})
-                </div>
-                <div class="kpi-row">
-                    <div class="kpi-value">
-                        {number_format(p2_share)} %
-                </div>
-                {delta_html(p2_share_delta, "%p")}
+            <div class="kpi-card kpi-lg kpi-has-icon">
+                <div class="kpi-icon2">📊</div>
+                <div class="kpi-text">
+                        <div class="kpi-label">
+                            군사비 / GDP ({selected_year})
+                        </div>
+                        <div class="kpi-row">
+                            <div class="kpi-value">
+                                {number_format(p2_share)} %
+                        </div>
+                        {delta_html(p2_share_delta, "%p")}
+                        </div>
                 </div>
             </div>
             """
@@ -6568,13 +6977,16 @@ else:
     with c5:
         render_html(
             f"""
-            <div class="kpi-card kpi-lg">
-                <div class="kpi-label">
-                    무기수입 점유율 (5년 누적)
-                </div>
-                <div class="kpi-row">
-                    <div class="kpi-value">{number_format(p2_tiv)} %</div>
-                    {delta_html(p2_tiv_delta, "%p")}
+            <div class="kpi-card kpi-lg kpi-has-icon">
+                <div class="kpi-icon2">📦</div>
+                <div class="kpi-text">
+                        <div class="kpi-label">
+                            무기수입 점유율 (5년 누적)
+                        </div>
+                        <div class="kpi-row">
+                            <div class="kpi-value">{number_format(p2_tiv)} %</div>
+                            {delta_html(p2_tiv_delta, "%p")}
+                        </div>
                 </div>
             </div>
             """
@@ -6583,15 +6995,18 @@ else:
     with c6:
         render_html(
             f"""
-            <div class="kpi-card kpi-lg">
-                <div class="kpi-label">
-                    분쟁 위험도 ({selected_year})
-                </div>
-                <div class="kpi-row">
-                    <div class="kpi-value kpi-risk">
-                        {number_format(p2_risk)}
-                </div>
-                {delta_html(p2_risk_delta, "", increase_bad=True)}
+            <div class="kpi-card kpi-lg kpi-has-icon">
+                <div class="kpi-icon2">⚠️</div>
+                <div class="kpi-text">
+                        <div class="kpi-label">
+                            분쟁 위험도 ({selected_year})
+                        </div>
+                        <div class="kpi-row">
+                            <div class="kpi-value kpi-risk">
+                                {number_format(p2_risk)}
+                        </div>
+                        {delta_html(p2_risk_delta, "", increase_bad=True)}
+                        </div>
                 </div>
             </div>
             """
@@ -6613,7 +7028,11 @@ else:
 
     with main_col:
 
-        with st.container(border=True, height=MAIN_PANEL_H):
+        with st.container(
+            border=True,
+            height=MAIN_PANEL_H,
+            key="card_p2_main",
+        ):
 
             setting = TREND_METRICS[active]
 
@@ -6658,7 +7077,11 @@ else:
             if key == active:
                 continue
 
-            with st.container(border=True, height=THUMB_PANEL_H):
+            with st.container(
+                border=True,
+                height=THUMB_PANEL_H,
+                key=f"card_p2_thumb_{key}",
+            ):
 
                 span_text = trend_year_span(df, sel_iso, key)
 
