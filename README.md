@@ -43,7 +43,7 @@ AWS 문서의 "SSL/TLS를 사용하여 DB 인스턴스 연결 암호화" 페이�
 접속 정보는 코드에 적지 않고 아래 두 파일에서 읽습니다. **두 파일 모두 커밋하지 않습니다.**
 실제 값은 팀 내부에서 공유받으세요.
 
-노트북용 — 프로젝트 루트에 `.env`
+노트북·전처리용 — 프로젝트 루트에 `.env`
 
 ```
 DB_USER=
@@ -100,8 +100,9 @@ python 01_preprocessing/01_gdp_df.py
 | 2 | `01_inform_df.py` | `data/INFORM2026_TREND_2017_2026_v72_ALL.xlsx` | `human_hazard_trend` |
 | 3 | `01_tiv_merged.py` | `trade-register.csv` | `defense_demand_processed`, `tiv_5y_share` |
 | 4 | `01_integrate_df.py` | 위 테이블들 | `integrate` |
-| 5 | `01_integrate_new.py` | 위 테이블들 | 국가코드 기준으로 다시 병합 (2000~2025년) |
+| 5 | `01_integrate_new.py` | 위 테이블들 | `integrate` (국가코드 기준으로 다시 병합, 2000~2025년) |
 
+- DB 연결은 `db_connect.py`가 맡습니다. 프로젝트 루트의 `.env`와 인증서를 읽어 연결하므로 스크립트에 접속 정보를 적지 않습니다.
 - 입력 파일 경로는 프로젝트 루트 기준입니다. 원자료 파일은 저장소에 포함돼 있지 않습니다.
 - 스크립트는 DB 테이블을 **덮어씁니다**(`if_exists='replace'`). 실행 전에 팀과 확인하세요.
 
@@ -118,4 +119,3 @@ python 01_preprocessing/01_gdp_df.py
 ## 정리 예정
 
 - `01_integrate_df.py`와 `01_integrate_new.py` 통합
-- 전처리 스크립트의 DB 접속 정보를 `.env` 방식으로 통일

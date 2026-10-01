@@ -1,22 +1,20 @@
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+
+from db_connect import db_name, get_engine
 import pycountry
 
-# base_url을 기본 awd rds 서버로 설정하고 url로 연걸하는 base_engine 생성
-base_url = 'mysql+pymysql://admin:dhgkqwlwhf5@import-demand-server.cqr8wgqy24po.us-east-1.rds.amazonaws.com:3306/'
-base_engine = create_engine(base_url, connect_args={'ssl': {'ca': './global-bundle.pem'}})
+# DB 접속 정보는 프로젝트 루트의 .env 에서 읽는다 (db_connect.py 참고)
+# 먼저 데이터베이스를 지정하지 않고 RDS 서버에 연결하는 base_engine 생성
+base_engine = get_engine(database=False)
 
-# 엔진이 연결 됐으면 SQL QUREY문 실행
+# 엔진이 연결 됐으면 SQL QUERY문 실행: 데이터베이스가 없으면 만든다
 with base_engine.connect() as conn:
-    conn.execute(text("CREATE DATABASE IF NOT EXISTS import_demand_db;"))
+    conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name()};"))
 
-# 쿼리문으로 생성된 데이터베이스로 url 설정하고 url로 연걸하는 engine 생성
-db_connection_url = 'mysql+pymysql://admin:dhgkqwlwhf5@import-demand-server.cqr8wgqy24po.us-east-1.rds.amazonaws.com:3306/import_demand_db'
-engine = create_engine(
-    db_connection_url,
-    connect_args={'ssl': {'ca': './global-bundle.pem'}}
-)
+# 위에서 만든 데이터베이스에 연결하는 engine 생성
+engine = get_engine()
 
 # 이 과정이 끝났으면 코드 파일이 aws rds 서버 안에 생성된 data base에 연결 된 것
 

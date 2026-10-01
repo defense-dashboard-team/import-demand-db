@@ -1,12 +1,11 @@
 import numpy as np
 import pandas as pd
 import pycountry
-from sqlalchemy import create_engine
 
-# RDS 연결 (파이썬용 주소 형식)
-engine = create_engine(
-    "mysql+pymysql://admin:dhgkqwlwhf5@import-demand-server.cqr8wgqy24po.us-east-1.rds.amazonaws.com:3306/import_demand_db?charset=utf8mb4"
-)
+from db_connect import get_engine
+
+# DB 접속 정보는 프로젝트 루트의 .env 에서 읽는다 (db_connect.py 참고)
+engine = get_engine()
 
 df = pd.read_csv(
     "trade-register.csv",

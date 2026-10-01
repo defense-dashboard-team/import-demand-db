@@ -1,13 +1,13 @@
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
+
+from db_connect import get_engine
 
 # ----------------------------------------------------------------------
 # DB 연결
 # ----------------------------------------------------------------------
-pw = input('비밀번호를 입력하시오 : ')
-db_connection_url = f'mysql+pymysql://admin:{pw}@import-demand-server.cqr8wgqy24po.us-east-1.rds.amazonaws.com:3306/import_demand_db'
-engine = create_engine(db_connection_url, connect_args={'ssl': {'ca': './global-bundle.pem'}})
+# DB 접속 정보는 프로젝트 루트의 .env 에서 읽는다 (db_connect.py 참고)
+engine = get_engine()
 
 # ----------------------------------------------------------------------
 # 원천 데이터 적재 (기존 CSV -> DB 테이블)
@@ -284,4 +284,4 @@ merged = merged.rename(
 # ----------------------------------------------------------------------
 # 저장
 # ----------------------------------------------------------------------
-merged.to_sql(name='integrate', con=engine, if_exists='replace', index=False)
+merged.to_sql(name='integrate', con=engine, if_exists='replace', index=False)

@@ -1,9 +1,10 @@
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-pw = input('비밀번호를 입력하시오 : ')
-db_connection_url = f'mysql+pymysql://admin:{pw}@import-demand-server.cqr8wgqy24po.us-east-1.rds.amazonaws.com:3306/import_demand_db'
-engine = create_engine(db_connection_url, connect_args={'ssl': {'ca': './global-bundle.pem'}})
+from db_connect import get_engine
+
+# DB 접속 정보는 프로젝트 루트의 .env 에서 읽는다 (db_connect.py 참고)
+engine = get_engine()
 
 
 df_usd = pd.read_sql("SELECT * FROM current_usd", con=engine)
@@ -89,4 +90,4 @@ with engine.connect() as conn:
     conn.execute(text("DROP TABLE IF EXISTS temp_usd_long;"))
     conn.execute(text("DROP TABLE IF EXISTS temp_gdp_long;"))
     conn.execute(text("DROP TABLE IF EXISTS temp_share_long;"))
-    conn.commit()
+    conn.commit()
