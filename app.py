@@ -5649,6 +5649,9 @@ def render_page1():
 
                 bearing=0,
             ),
+            transition=dict(
+    duration=1200,
+    easing="cubic-in-out",
 
             height=500,
 
@@ -5669,8 +5672,7 @@ def render_page1():
                 "event+select",
 
             # 사용자가 움직인 지도 위치/줌을 최대한 유지
-            uirevision=
-                f"global-map-{selected_year}",
+            uirevision=f"global-map-{selected_year}-{selected_iso or 'world'}",
         )
 
 
