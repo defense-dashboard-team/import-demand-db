@@ -53,18 +53,6 @@ def load_world_geojson():
         ).decode("utf-8")
     )
 
-    # 좌표를 소수점 3자리(약 100m)로 줄여 브라우저 전송량을 절반 이하로
-    # (세계지도 크기에서는 눈으로 차이가 없습니다)
-    def round_coords(value):
-        if isinstance(value, list):
-            return [round_coords(item) for item in value]
-        return round(value, 3)
-
-    for feature in geojson.get("features", []):
-        geometry = feature.get("geometry") or {}
-        if "coordinates" in geometry:
-            geometry["coordinates"] = round_coords(geometry["coordinates"])
-
     ids = [
         feature.get("id")
         for feature in geojson.get("features", [])
@@ -72,201 +60,6 @@ def load_world_geojson():
     ]
 
     return geojson, ids
-
-
-@st.cache_resource
-def world_geojson_subset(ids):
-    """
-    지도 레이어마다 필요한 나라의 국경선만 담은 GeoJSON.
-    (레이어 3개가 전체 국경선을 각각 보내면 매번 1MB 넘게 전송됩니다)
-    ids : 정렬된 ISO3 튜플
-    """
-    geojson, _ = load_world_geojson()
-    keep = set(ids)
-
-    return {
-        "type": "FeatureCollection",
-        "features": [
-            feature
-            for feature in geojson.get("features", [])
-            if feature.get("id") in keep
-        ],
-    }
-
-def _ring_area(ring):
-    """경위도 좌표 링의 대략적인 면적 (크기 비교용)."""
-    area = 0.0
-    for (x1, y1, *_), (x2, y2, *_) in zip(ring, ring[1:]):
-        area += x1 * y2 - x2 * y1
-    return abs(area) / 2
-
-
-@st.cache_data
-def country_view_bounds(iso):
-    """
-    선택 국가가 화면에 들어오도록 줌인할 영역 (west, south, east, north).
-
-    본토에서 멀리 떨어진 해외 영토(프랑스령 기아나, 알래스카 등)와
-    날짜변경선에 걸친 조각 때문에 영역이 세계 전체로 커지지 않도록
-    "가장 큰 땅덩어리의 25% 이상"인 조각만 포함합니다.
-    """
-    geojson, _ = load_world_geojson()
-
-    for feature in geojson.get("features", []):
-
-        if feature.get("id") != iso:
-            continue
-
-        geometry = feature.get("geometry") or {}
-
-        if geometry.get("type") == "Polygon":
-            polygons = [geometry["coordinates"]]
-        elif geometry.get("type") == "MultiPolygon":
-            polygons = geometry["coordinates"]
-        else:
-            return None
-
-        parts = [
-            (_ring_area(poly[0]), poly[0])
-            for poly in polygons
-            if poly and poly[0]
-        ]
-
-        if not parts:
-            return None
-
-        biggest = max(area for area, _ in parts)
-        keep = [ring for area, ring in parts if area >= biggest * 0.25]
-
-        def extent(rings):
-            lons = [pt[0] for ring in rings for pt in ring]
-            lats = [pt[1] for ring in rings for pt in ring]
-            return min(lons), min(lats), max(lons), max(lats)
-
-        west, south, east, north = extent(keep)
-
-        # 날짜변경선(±180°)에 걸쳐 영역이 비정상적으로 넓어지면 가장 큰 조각만 사용
-        if east - west > 180:
-            west, south, east, north = extent(
-                [max(parts, key=lambda p: p[0])[1]]
-            )
-
-        return west, south, east, north
-
-    return None
-
-
-def lock_single_world_script():
-    """
-    지도가 좌우로 반복(world copy)되지 않게 하고 세계 한 장 안에서만 움직이게 합니다.
-    plotly 레이아웃 옵션 대신 MapLibre 지도 객체를 직접 설정하므로
-    plotly 버전과 상관없이 지도 자체는 항상 그려집니다.
-    """
-    components.html(
-        """
-        <script>
-        (function () {
-            const doc = window.parent.document;
-            let tries = 0;
-
-            function findMap() {
-                const plots = doc.querySelectorAll('.js-plotly-plot');
-                for (const gd of plots) {
-                    const fl = gd._fullLayout;
-                    if (!fl) continue;
-                    const sub = fl.map || fl.mapbox;
-                    if (sub && sub._subplot && sub._subplot.map) {
-                        return sub._subplot.map;
-                    }
-                }
-                return null;
-            }
-
-            function lock() {
-                const map = findMap();
-                if (!map) {
-                    if (++tries < 40) setTimeout(lock, 150);
-                    return;
-                }
-                try {
-                    map.setRenderWorldCopies(false);   // 세계 복제 끄기
-                    map.setMaxBounds([[-180, -85], [180, 85]]);  // 세계 밖으로 못 밀게
-                } catch (e) {
-                    console.warn('map lock failed', e);
-                }
-            }
-
-            setTimeout(lock, 300);
-        })();
-        </script>
-        """,
-        height=0,
-    )
-
-
-def zoom_to_country_script(iso):
-    """
-    선택한 국가로 부드럽게 줌인하는 애니메이션.
-
-    Plotly는 파이썬에서 center/zoom을 바꾸면 애니메이션 없이 순간이동하므로,
-    브라우저에 이미 그려진 MapLibre 지도 객체를 찾아 fitBounds로 이동시킵니다.
-    (scroll_to_top_script와 같은 방식으로 parent 문서에 접근)
-    """
-    bounds = country_view_bounds(iso)
-
-    if not bounds:
-        return
-
-    west, south, east, north = bounds
-
-    components.html(
-        """
-        <script>
-        (function () {
-            const bounds = [[__WEST__, __SOUTH__], [__EAST__, __NORTH__]];
-            const doc = window.parent.document;
-            let tries = 0;
-
-            function findMap() {
-                const plots = doc.querySelectorAll('.js-plotly-plot');
-                for (const gd of plots) {
-                    const fl = gd._fullLayout;
-                    if (!fl) continue;
-                    const sub = fl.map || fl.mapbox;
-                    if (sub && sub._subplot && sub._subplot.map) {
-                        return sub._subplot.map;
-                    }
-                }
-                return null;
-            }
-
-            function fly() {
-                const map = findMap();
-                if (!map) {
-                    if (++tries < 40) setTimeout(fly, 150);
-                    return;
-                }
-                map.fitBounds(bounds, {
-                    padding: { top: 40, bottom: 40, left: 60, right: 60 },
-                    maxZoom: 6,         // 작은 나라에서 과하게 확대되지 않도록
-                    duration: 1400,     // 애니메이션 시간(ms)
-                    linear: true,       // true: 부드러운 줌인 / 지우면 날아가듯 이동
-                    essential: true,
-                });
-            }
-
-            // 새 그림이 화면에 반영된 뒤 실행 (너무 빠르면 중간에 끊김)
-            setTimeout(fly, 400);
-        })();
-        </script>
-        """
-        .replace("__WEST__", str(west))
-        .replace("__SOUTH__", str(south))
-        .replace("__EAST__", str(east))
-        .replace("__NORTH__", str(north)),
-        height=0,
-    )
-
 
 TOP_PANEL_HEIGHT = 540
 BOTTOM_PANEL_HEIGHT = 445
@@ -1284,15 +1077,6 @@ st.html("""
     display: none !important;
 }
 
-/* 다시 계산하는 동안 화면이 반투명하게 흐려지는 Streamlit 기본 효과 끄기 */
-[data-stale="true"],
-.stale-element,
-[data-testid="stElementContainer"][data-stale="true"] {
-    opacity: 1 !important;
-    transition: none !important;
-    filter: none !important;
-}
-
 /* ---------- 카드 (테두리 있는 패널 → 흰 카드 한 겹) ---------- */
 
 .stApp [class*="st-key-card_"] {
@@ -1441,72 +1225,6 @@ st.html("""
     color: #0F2A4A !important;
 }
 
-/* ---------- 배너 오른쪽 위 : 데이터 기준연도 ---------- */
-
-.stApp .header-meta {
-    position: absolute;
-    top: 10px;
-    right: 16px;
-    z-index: 10;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: rgba(4, 30, 58, 0.45);
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.1px;
-    backdrop-filter: blur(2px);
-}
-
-/* ---------- 1페이지 지도 범례 : 선택 국가 위치 ---------- */
-
-.stApp .legend-marker {
-    position: absolute;
-    left: 0;
-    width: 44px;
-    border-top: 3px solid #F59E0B;
-    transform: translateY(-1.5px);
-    z-index: 3;
-    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9));
-}
-
-/* 막대 왼쪽 작은 화살표 */
-.stApp .legend-marker::before {
-    content: "";
-    position: absolute;
-    left: -7px;
-    top: -6.5px;
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
-    border-left: 7px solid #F59E0B;
-}
-
-.stApp .legend-marker-label {
-    position: absolute;
-    left: 50px;
-    transform: translateY(-50%);
-    z-index: 4;
-    padding: 3px 8px;
-    background: #FFF7E8;
-    border: 1px solid #F5C26B;
-    border-radius: 7px;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10);
-    white-space: nowrap;
-    line-height: 1.25;
-}
-
-.stApp .legend-marker-name {
-    color: #92400E;
-    font-size: 10px;
-    font-weight: 600;
-}
-
-.stApp .legend-marker-value {
-    color: #7C2D12;
-    font-size: 12px;
-    font-weight: 700;
-}
-
 /* ---------- 유사 국가 표 ---------- */
 
 .stApp .similarity-table {
@@ -1639,9 +1357,7 @@ def get_db_engine(db_url):
     return create_engine(db_url, pool_pre_ping=True)
 
 
-# DB는 수동으로 갱신되므로 6시간 동안 저장해 두고 씁니다.
-# (10분마다 다시 불러오면 그때마다 4초 정도 기다려야 합니다)
-@st.cache_data(ttl=60 * 60 * 6, show_spinner="데이터를 불러오는 중...")
+@st.cache_data(ttl=600, show_spinner="데이터를 불러오는 중...")
 def load_integrate_raw():
     """
     공용 AWS DB(import_demand_db)의 integrate 테이블을 불러옵니다.
@@ -1813,20 +1529,6 @@ COUNTRY_DISPLAY_FIX = {
 
 
 KO_LOCALE = Locale.parse("ko")
-
-
-def josa(word, with_batchim, without_batchim):
-    """
-    받침에 맞는 조사를 붙입니다. 예) josa("대한민국", "과", "와") → "대한민국과"
-    한글이 아닌 글자로 끝나면(GDP 등) 받침 없는 쪽을 씁니다.
-    """
-    word = str(word)
-    last = word[-1] if word else ""
-
-    if "가" <= last <= "힣" and (ord(last) - 0xAC00) % 28:
-        return word + with_batchim
-
-    return word + without_batchim
 
 # babel 한글 국가명이 없거나 어색한 경우 직접 지정 (ISO3 기준)
 KOREAN_NAME_FIX = {
@@ -3071,7 +2773,7 @@ TREND_METRICS = {
         "accent": ORANGE,
         "y_title": "군사비 (백만 USD)",
         "y2_title": "군사비/GDP (%)",
-        "note": "막대: 군사비 · 선: GDP 대비 군사비(%)",
+        "note": "막대 = 군사비 규모 / 주황 선 = GDP 대비 비중",
     },
     "gdp": {
         "label": "GDP",
@@ -3083,7 +2785,7 @@ TREND_METRICS = {
         "accent": None,
         "y_title": "GDP (백만 USD)",
         "y2_title": None,
-        "note": "국가 경제 규모",
+        "note": "경제 규모 — 군사비 여력을 가늠하는 맥락 지표",
     },
     "tiv": {
         "label": "무기수입 점유율 (5년 누적)",
@@ -3095,7 +2797,7 @@ TREND_METRICS = {
         "accent": None,
         "y_title": "무기수입 점유율 (5년, %)",
         "y2_title": None,
-        "note": "최근 5년 누적 무기 수입의 세계 대비 비중",
+        "note": "최근 5년 누적 무기 이전량의 세계 대비 비중",
     },
     "risk": {
         "label": "분쟁위험도",
@@ -3107,7 +2809,7 @@ TREND_METRICS = {
         "accent": None,
         "y_title": "분쟁위험도 (0~10)",
         "y2_title": None,
-        "note": "INFORM 인적 위험 점수 (0~10)",
+        "note": "INFORM Risk 기반 인적 위험 점수",
     },
 }
 
@@ -3704,30 +3406,11 @@ def render_page_strip(page_key, show_country=False):
     )
 
 
-def data_year_text():
-    """배너에 표시할 데이터 기준연도 (DB 데이터에서 자동 계산)"""
-    text = f"데이터 {min_year}–{max_year}"
-
-    risk_years = df.loc[df[COL["risk"]].notna(), COL["year"]]
-
-    if not risk_years.empty:
-        text += (
-            f" · 분쟁위험도 {int(risk_years.min())}"
-            f"–{int(risk_years.max())}"
-        )
-
-    return text
-
-
 def render_banner(page_key):
     """전 페이지 공통 상단 머리글 (재원님 1페이지의 제트기 헤더)"""
     render_html(
         f"""
         <div class="main-header">
-
-            <div class="header-meta">
-                {html.escape(data_year_text())}
-            </div>
 
             <img
                 class="header-jet"
@@ -4270,12 +3953,10 @@ def render_page1():
         margin-top: 7px;
     }}
 
-    /* 증가 : 초록 / 감소 : 빨강 (분쟁위험 관련은 아래 risk 클래스) */
-    .delta-up,
-    .delta-risk-down {{
-        color: #198651;
+    .delta-up {{
+        color: #e63636;
 
-        background: #edf9f1;
+        background: #fff0f0;
 
         padding: 5px 7px;
 
@@ -4287,11 +3968,10 @@ def render_page1():
         white-space: nowrap;
     }}
 
-    .delta-down,
-    .delta-risk-up {{
-        color: #e63636;
+    .delta-down {{
+        color: #198651;
 
-        background: #fff0f0;
+        background: #edf9f1;
 
         padding: 5px 7px;
 
@@ -5101,17 +4781,11 @@ def render_page1():
         .nunique()
     )
 
-    # 고위험 국가 수는 늘어나면 위험 신호이므로 증가 = 빨강
     risk_delta_text, risk_delta_type = count_delta(
         high_risk_count,
         previous_high_risk_count,
         len(previous_df) > 0,
     )
-
-    risk_delta_type = {
-        "up": "risk-up",
-        "down": "risk-down",
-    }.get(risk_delta_type, risk_delta_type)
 
 
     # ============================================================
@@ -5486,11 +5160,8 @@ def render_page1():
 
             if selected_metric == "GDP":
 
-                # GDP도 군사비처럼 백만 USD 단위 → 달러로 바꿔 표시
                 return money_format(
-                    military_to_usd(
-                        value
-                    )
+                    value
                 )
 
 
@@ -5605,48 +5276,6 @@ def render_page1():
 
 
         # ========================================================
-        # 28-1. 범례 막대에 선택 국가 위치 표시
-        #
-        # 지도 색과 같은 기준(color_value / color_max)으로 위치를 정하므로
-        # 범례에서 가리키는 색 = 지도에서 그 나라의 색이 됩니다.
-        # ========================================================
-
-        legend_marker_html = ""
-
-        marker_rows = map_df[
-            map_df[ISO_COL]
-            == st.session_state.get("selected_country_iso")
-        ]
-
-        if not marker_rows.empty:
-
-            marker_row = marker_rows.iloc[0]
-
-            marker_pos = min(
-                max(
-                    float(marker_row["color_value"]) / color_max,
-                    0.0,
-                ),
-                1.0,
-            )
-
-            # 막대 위쪽이 최댓값, 아래쪽이 0
-            marker_top = (1 - marker_pos) * 100
-
-            legend_marker_html = f"""
-            <div class="legend-marker" style="top:{marker_top:.2f}%;"></div>
-            <div class="legend-marker-label" style="top:{marker_top:.2f}%;">
-                <div class="legend-marker-name">
-                    {html.escape(str(marker_row["Country_KO"]))}
-                </div>
-                <div class="legend-marker-value">
-                    {selected_value_format(marker_row[selected_column])}
-                </div>
-            </div>
-            """
-
-
-        # ========================================================
         # 지도 그라데이션 색상
         #
         # 무기 수입 점유율은 낮은 값도 너무 옅게 보이지 않도록
@@ -5689,10 +5318,6 @@ def render_page1():
 
         fig_map = go.Figure()
 
-        # 레이어별로 필요한 나라만 담은 국경선 (전송량 절감)
-        data_isos = tuple(sorted(set(map_df[ISO_COL])))
-        empty_isos = tuple(sorted(set(WORLD_GEOJSON_IDS) - set(data_isos)))
-
 
         # --------------------------------------------------------
         # 데이터가 없는 국가도 회색으로 보이게 하는 기본 국가 레이어
@@ -5703,17 +5328,17 @@ def render_page1():
             go.Choroplethmap(
 
                 geojson=
-                    world_geojson_subset(empty_isos),
+                    WORLD_GEOJSON,
 
                 featureidkey=
                     "id",
 
                 locations=
-                    list(empty_isos),
+                    WORLD_GEOJSON_IDS,
 
                 z=
                     [0] * len(
-                        empty_isos
+                        WORLD_GEOJSON_IDS
                     ),
 
                 zmin=
@@ -5752,7 +5377,7 @@ def render_page1():
             go.Choroplethmap(
 
                 geojson=
-                    world_geojson_subset(data_isos),
+                    WORLD_GEOJSON,
 
                 featureidkey=
                     "id",
@@ -5850,7 +5475,7 @@ def render_page1():
                 go.Choroplethmap(
 
                     geojson=
-                        world_geojson_subset((selected_iso,)),
+                        WORLD_GEOJSON,
 
                     featureidkey=
                         "id",
@@ -6187,8 +5812,8 @@ def render_page1():
                 p1_html(
                 f"""
                 <div class="chart-description">
-                    색이 진할수록 {josa(metric_title, "이", "가")} 큽니다.
-                    국가를 클릭하면 선택됩니다.
+                    국가별 {metric_title} 수준을
+                    연속형 그라데이션으로 비교합니다.
                 </div>
                 """
                 )
@@ -6369,36 +5994,6 @@ def render_page1():
                                     st.rerun()
 
 
-                    # 지도가 새로 그려질 때마다 세계 한 장으로 고정
-                    lock_single_world_script()
-
-
-                    # =============================================
-                    # 국가가 바뀐 경우에만 줌인 애니메이션 실행
-                    # (첫 화면 로드 때는 움직이지 않고 기준값만 저장)
-                    # =============================================
-
-                    _FLY_UNSET = "__unset__"
-
-                    _fly_iso = st.session_state.get(
-                        "selected_country_iso"
-                    )
-
-                    _fly_prev = st.session_state.get(
-                        "map_fly_last_iso",
-                        _FLY_UNSET,
-                    )
-
-                    if _fly_iso != _fly_prev:
-
-                        st.session_state[
-                            "map_fly_last_iso"
-                        ] = _fly_iso
-
-                        if _fly_prev != _FLY_UNSET and _fly_iso:
-                            zoom_to_country_script(_fly_iso)
-
-
                 # ------------------------------------------------
                 # 그라데이션 + 경계선 숫자 범례
                 # ------------------------------------------------
@@ -6420,8 +6015,6 @@ def render_page1():
 
                         <div class="legend-gradient">
                         </div>
-
-                        {legend_marker_html}
 
 
                         <!-- 100% / 최대값 -->
@@ -6541,7 +6134,9 @@ def render_page1():
                 </div>
 
                 <div class="chart-description">
-                    막대 길이는 1위 국가 대비 비율입니다.
+                    {selected_year}년 기준
+                    {metric_title}가 높은
+                    상위 10개 국가입니다.
                 </div>
 
                 {create_top10_html()}
@@ -6947,12 +6542,14 @@ elif st.session_state.app_page == "page3":
 
                     <div class="panel-note">
                         {
-                            html.escape(josa(country_display(country), "과", "와"))
+                            html.escape(country_display(country)) + "와"
                             if has_country
                             else "선택 국가와"
                         }
-                        지표가 비슷한 상위 {SIM_TOP_N}개국 ·
-                        군사비/GDP · {html.escape(basis_label)} · GDP 기준
+                        지표 구조가 비슷한 상위 {SIM_TOP_N}개국 ·
+                        기준 차트 {html.escape(basis_label)} ·
+                        군사비/GDP · 기준지표 · GDP를
+                        z-표준화한 거리
                     </div>
                 </div>
                 """
@@ -7180,9 +6777,10 @@ elif st.session_state.app_page == "page3":
 
                 sim_body += (
                     '<div class="panel-caption">'
-                    "맨 윗줄이 기준 국가 · "
-                    "버블차트 주황 테두리는 유사 국가, "
-                    "빨간 테두리는 선택 국가 (다시 클릭하면 해제)"
+                    "맨 윗줄은 기준 국가입니다. "
+                    "버블차트에서 주황색 테두리는 유사 국가, "
+                    "빨간 테두리는 현재 선택 국가이며, "
+                    "선택된 버블을 다시 클릭하면 선택이 해제됩니다."
                     "</div>"
                 )
 
@@ -7212,8 +6810,10 @@ elif st.session_state.app_page == "page3":
                     </div>
 
                     <div class="panel-note">
-                        {year}년 · 스피어만 상관계수 ·
-                        * p&lt;0.05 ** p&lt;0.01 *** p&lt;0.001{corr_extra}
+                        {year}년 · 스피어만(순위) 상관계수 ·
+                        별표는 유의수준
+                        (* p&lt;0.05, ** p&lt;0.01, *** p&lt;0.001) ·
+                        쌍별 표본수는 hover{corr_extra}
                     </div>
                 </div>
                 """
@@ -7328,7 +6928,7 @@ else:
                 <div class="kpi-text">
                         <div class="kpi-label">GDP ({selected_year})</div>
                         <div class="kpi-row">
-                            <div class="kpi-value">{usd_m_text(p2_gdp)}</div>
+                            <div class="kpi-value">{money_format(p2_gdp)}</div>
                             {delta_html(percent_change(p2_gdp, p2_gdp_prev))}
                         </div>
                 </div>
@@ -7344,7 +6944,7 @@ else:
                 <div class="kpi-text">
                         <div class="kpi-label">군사비 ({selected_year})</div>
                         <div class="kpi-row">
-                            <div class="kpi-value">{usd_m_text(p2_military)}</div>
+                            <div class="kpi-value">{money_format(p2_military)}</div>
                             {delta_html(
                                 percent_change(p2_military, p2_military_prev)
                             )}
@@ -7523,8 +7123,9 @@ else:
                 )
 
     st.caption(
-        "작은 그래프 제목을 누르면 큰 그래프로 바뀝니다. "
-        "노란 띠는 선택한 연도입니다."
+        "작은 그래프의 제목 버튼을 누르면 해당 지표가 "
+        "왼쪽 메인 그래프로 올라옵니다. "
+        "점선은 사이드바에서 선택한 연도입니다."
     )
 
     render_footnote()
