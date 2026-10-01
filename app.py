@@ -61,6 +61,64 @@ def load_world_geojson():
 
     return geojson, ids
 
+
+def get_country_map_view(geojson, country_iso):
+    """GeoJSON 경계에서 선택 국가의 중심점과 적절한 지도 zoom을 계산합니다."""
+    if not country_iso:
+        return 12, 5, 0.72
+
+    feature = next(
+        (
+            f for f in geojson.get("features", [])
+            if str(f.get("id", "")).upper() == str(country_iso).upper()
+        ),
+        None,
+    )
+
+    if feature is None:
+        return 12, 5, 0.72
+
+    coords = []
+
+    def collect_points(obj):
+        if (
+            isinstance(obj, (list, tuple))
+            and len(obj) >= 2
+            and isinstance(obj[0], (int, float))
+            and isinstance(obj[1], (int, float))
+        ):
+            coords.append((float(obj[0]), float(obj[1])))
+            return
+
+        if isinstance(obj, (list, tuple)):
+            for item in obj:
+                collect_points(item)
+
+    collect_points(feature.get("geometry", {}).get("coordinates", []))
+
+    if not coords:
+        return 12, 5, 0.72
+
+    lons = [p[0] for p in coords]
+    lats = [p[1] for p in coords]
+
+    min_lon, max_lon = min(lons), max(lons)
+    min_lat, max_lat = min(lats), max(lats)
+
+    center_lon = (min_lon + max_lon) / 2
+    center_lat = (min_lat + max_lat) / 2
+
+    lon_span = max_lon - min_lon
+    lat_span = max_lat - min_lat
+    span = max(lon_span, lat_span * 1.25, 0.8)
+
+    # 국가 크기에 따라 자동 확대하되 과도한 확대는 제한
+    zoom = np.log2(360 / span) - 1.0
+    zoom = float(np.clip(zoom, 2.5, 6.2))
+
+    return center_lat, center_lon, zoom
+
+
 TOP_PANEL_HEIGHT = 540
 BOTTOM_PANEL_HEIGHT = 445
 
@@ -1077,15 +1135,6 @@ st.html("""
     display: none !important;
 }
 
-/* 다시 계산하는 동안 화면이 반투명하게 흐려지는 Streamlit 기본 효과 끄기 */
-[data-stale="true"],
-.stale-element,
-[data-testid="stElementContainer"][data-stale="true"] {
-    opacity: 1 !important;
-    transition: none !important;
-    filter: none !important;
-}
-
 /* ---------- 카드 (테두리 있는 패널 → 흰 카드 한 겹) ---------- */
 
 .stApp [class*="st-key-card_"] {
@@ -1232,55 +1281,6 @@ st.html("""
 /* KPI 수치 색 통일 (증감 색으로 방향을 보여주므로 수치는 차분한 남색) */
 .stApp .kpi-lg .kpi-value {
     color: #0F2A4A !important;
-}
-
-/* ---------- 1페이지 지도 범례 : 선택 국가 위치 ---------- */
-
-.stApp .legend-marker {
-    position: absolute;
-    left: 0;
-    width: 44px;
-    border-top: 3px solid #F59E0B;
-    transform: translateY(-1.5px);
-    z-index: 3;
-    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9));
-}
-
-/* 막대 왼쪽 작은 화살표 */
-.stApp .legend-marker::before {
-    content: "";
-    position: absolute;
-    left: -7px;
-    top: -6.5px;
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
-    border-left: 7px solid #F59E0B;
-}
-
-.stApp .legend-marker-label {
-    position: absolute;
-    left: 50px;
-    transform: translateY(-50%);
-    z-index: 4;
-    padding: 3px 8px;
-    background: #FFF7E8;
-    border: 1px solid #F5C26B;
-    border-radius: 7px;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10);
-    white-space: nowrap;
-    line-height: 1.25;
-}
-
-.stApp .legend-marker-name {
-    color: #92400E;
-    font-size: 10px;
-    font-weight: 600;
-}
-
-.stApp .legend-marker-value {
-    color: #7C2D12;
-    font-size: 12px;
-    font-weight: 700;
 }
 
 /* ---------- 유사 국가 표 ---------- */
@@ -5334,48 +5334,6 @@ def render_page1():
 
 
         # ========================================================
-        # 28-1. 범례 막대에 선택 국가 위치 표시
-        #
-        # 지도 색과 같은 기준(color_value / color_max)으로 위치를 정하므로
-        # 범례에서 가리키는 색 = 지도에서 그 나라의 색이 됩니다.
-        # ========================================================
-
-        legend_marker_html = ""
-
-        marker_rows = map_df[
-            map_df[ISO_COL]
-            == st.session_state.get("selected_country_iso")
-        ]
-
-        if not marker_rows.empty:
-
-            marker_row = marker_rows.iloc[0]
-
-            marker_pos = min(
-                max(
-                    float(marker_row["color_value"]) / color_max,
-                    0.0,
-                ),
-                1.0,
-            )
-
-            # 막대 위쪽이 최댓값, 아래쪽이 0
-            marker_top = (1 - marker_pos) * 100
-
-            legend_marker_html = f"""
-            <div class="legend-marker" style="top:{marker_top:.2f}%;"></div>
-            <div class="legend-marker-label" style="top:{marker_top:.2f}%;">
-                <div class="legend-marker-name">
-                    {html.escape(str(marker_row["Country_KO"]))}
-                </div>
-                <div class="legend-marker-value">
-                    {selected_value_format(marker_row[selected_column])}
-                </div>
-            </div>
-            """
-
-
-        # ========================================================
         # 지도 그라데이션 색상
         #
         # 무기 수입 점유율은 낮은 값도 너무 옅게 보이지 않도록
@@ -5630,33 +5588,61 @@ def render_page1():
         #   반대편 세계가 이어서 나타남
         # ========================================================
 
-       map_center_lat, map_center_lon, map_zoom = (
-    get_country_map_view(
-        WORLD_GEOJSON,
-        selected_iso,
-    )
-    if selected_iso
-    else (12, 5, 0.72)
-)
+        # --------------------------------------------------------
+        # 선택 국가가 있으면 해당 국가 중심으로 카메라 이동
+        # --------------------------------------------------------
+        map_center_lat, map_center_lon, map_zoom = (
+            get_country_map_view(
+                WORLD_GEOJSON,
+                selected_iso,
+            )
+            if selected_iso
+            else (12, 5, 0.72)
+        )
 
-fig_map.update_layout(
-    map=dict(
-        style="white-bg",
-        center=dict(
-            lat=map_center_lat,
-            lon=map_center_lon,
-        ),
-        zoom=map_zoom,
-        pitch=0,
-        bearing=0,
-    ),
-    height=500,
-    margin=dict(l=0, r=0, t=0, b=0),
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    clickmode="event+select",
-    uirevision=f"global-map-{selected_year}-{selected_iso or 'world'}",
-)
+
+        fig_map.update_layout(
+
+            map=dict(
+
+                # 외부 타일 서버 없이 깨끗한 흰 배경
+                style="white-bg",
+
+                center=dict(
+                    lat=map_center_lat,
+                    lon=map_center_lon,
+                ),
+
+                # 선택 국가의 크기에 맞춰 자동 확대
+                zoom=map_zoom,
+
+                pitch=0,
+
+                bearing=0,
+            ),
+
+            height=500,
+
+            margin=dict(
+                l=0,
+                r=0,
+                t=0,
+                b=0,
+            ),
+
+            paper_bgcolor=
+                "rgba(0,0,0,0)",
+
+            plot_bgcolor=
+                "rgba(0,0,0,0)",
+
+            clickmode=
+                "event+select",
+
+            # 국가가 바뀌면 카메라 위치를 새 국가 기준으로 갱신
+            uirevision=
+                f"global-map-{selected_year}-{selected_iso or 'world'}",
+        )
 
 
         # ========================================================
@@ -6100,8 +6086,6 @@ fig_map.update_layout(
 
                         <div class="legend-gradient">
                         </div>
-
-                        {legend_marker_html}
 
 
                         <!-- 100% / 최대값 -->
