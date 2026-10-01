@@ -5630,51 +5630,33 @@ def render_page1():
         #   반대편 세계가 이어서 나타남
         # ========================================================
 
-        fig_map.update_layout(
+       map_center_lat, map_center_lon, map_zoom = (
+    get_country_map_view(
+        WORLD_GEOJSON,
+        selected_iso,
+    )
+    if selected_iso
+    else (12, 5, 0.72)
+)
 
-            map=dict(
-
-                # 외부 타일 서버 없이 깨끗한 흰 배경
-                style="white-bg",
-
-                center=dict(
-                    lat=12,
-                    lon=5,
-                ),
-
-                # 세계가 카드 너비를 거의 채우도록 설정
-                zoom=0.72,
-
-                pitch=0,
-
-                bearing=0,
-            ),
-            transition=dict(
-    duration=1200,
-    easing="cubic-in-out",
-
-            height=500,
-
-            margin=dict(
-                l=0,
-                r=0,
-                t=0,
-                b=0,
-            ),
-
-            paper_bgcolor=
-                "rgba(0,0,0,0)",
-
-            plot_bgcolor=
-                "rgba(0,0,0,0)",
-
-            clickmode=
-                "event+select",
-
-            # 사용자가 움직인 지도 위치/줌을 최대한 유지
-            uirevision=f"global-map-{selected_year}-{selected_iso or 'world'}",
-        )
-        )
+fig_map.update_layout(
+    map=dict(
+        style="white-bg",
+        center=dict(
+            lat=map_center_lat,
+            lon=map_center_lon,
+        ),
+        zoom=map_zoom,
+        pitch=0,
+        bearing=0,
+    ),
+    height=500,
+    margin=dict(l=0, r=0, t=0, b=0),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    clickmode="event+select",
+    uirevision=f"global-map-{selected_year}-{selected_iso or 'world'}",
+)
 
 
         # ========================================================
