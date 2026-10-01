@@ -81,7 +81,7 @@ streamlit run app.py
 
 | 순서 | 노트북 | 내용 |
 |---|---|---|
-| 1 | `02_EDA_re.ipynb` | 이상치, 정규성 검정, 상관분석, 다중공선성 |
+| 1 | `02_EDA.ipynb` | 이상치, 정규성 검정, 상관분석, 다중공선성 |
 | 2 | `03_stat_hypothesis.ipynb` | 버블차트 축 조합 검정, 버블 크기 검정, 추세 검정 |
 
 그 밖에 `04_Visualization.ipynb`는 대시보드 차트 시안 작업용입니다.
