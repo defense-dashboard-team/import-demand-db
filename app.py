@@ -53,6 +53,18 @@ def load_world_geojson():
         ).decode("utf-8")
     )
 
+    # 좌표를 소수점 3자리(약 100m)로 줄여 브라우저 전송량을 절반 이하로
+    # (세계지도 크기에서는 눈으로 차이가 없습니다)
+    def round_coords(value):
+        if isinstance(value, list):
+            return [round_coords(item) for item in value]
+        return round(value, 3)
+
+    for feature in geojson.get("features", []):
+        geometry = feature.get("geometry") or {}
+        if "coordinates" in geometry:
+            geometry["coordinates"] = round_coords(geometry["coordinates"])
+
     ids = [
         feature.get("id")
         for feature in geojson.get("features", [])
@@ -60,6 +72,26 @@ def load_world_geojson():
     ]
 
     return geojson, ids
+
+
+@st.cache_resource
+def world_geojson_subset(ids):
+    """
+    지도 레이어마다 필요한 나라의 국경선만 담은 GeoJSON.
+    (레이어 3개가 전체 국경선을 각각 보내면 매번 1MB 넘게 전송됩니다)
+    ids : 정렬된 ISO3 튜플
+    """
+    geojson, _ = load_world_geojson()
+    keep = set(ids)
+
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            feature
+            for feature in geojson.get("features", [])
+            if feature.get("id") in keep
+        ],
+    }
 
 TOP_PANEL_HEIGHT = 540
 BOTTOM_PANEL_HEIGHT = 445
@@ -1234,6 +1266,23 @@ st.html("""
     color: #0F2A4A !important;
 }
 
+/* ---------- 배너 오른쪽 위 : 데이터 기준연도 ---------- */
+
+.stApp .header-meta {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    z-index: 10;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(4, 30, 58, 0.45);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1px;
+    backdrop-filter: blur(2px);
+}
+
 /* ---------- 1페이지 지도 범례 : 선택 국가 위치 ---------- */
 
 .stApp .legend-marker {
@@ -1415,7 +1464,9 @@ def get_db_engine(db_url):
     return create_engine(db_url, pool_pre_ping=True)
 
 
-@st.cache_data(ttl=600, show_spinner="데이터를 불러오는 중...")
+# DB는 수동으로 갱신되므로 6시간 동안 저장해 두고 씁니다.
+# (10분마다 다시 불러오면 그때마다 4초 정도 기다려야 합니다)
+@st.cache_data(ttl=60 * 60 * 6, show_spinner="데이터를 불러오는 중...")
 def load_integrate_raw():
     """
     공용 AWS DB(import_demand_db)의 integrate 테이블을 불러옵니다.
@@ -1587,6 +1638,20 @@ COUNTRY_DISPLAY_FIX = {
 
 
 KO_LOCALE = Locale.parse("ko")
+
+
+def josa(word, with_batchim, without_batchim):
+    """
+    받침에 맞는 조사를 붙입니다. 예) josa("대한민국", "과", "와") → "대한민국과"
+    한글이 아닌 글자로 끝나면(GDP 등) 받침 없는 쪽을 씁니다.
+    """
+    word = str(word)
+    last = word[-1] if word else ""
+
+    if "가" <= last <= "힣" and (ord(last) - 0xAC00) % 28:
+        return word + with_batchim
+
+    return word + without_batchim
 
 # babel 한글 국가명이 없거나 어색한 경우 직접 지정 (ISO3 기준)
 KOREAN_NAME_FIX = {
@@ -2831,7 +2896,7 @@ TREND_METRICS = {
         "accent": ORANGE,
         "y_title": "군사비 (백만 USD)",
         "y2_title": "군사비/GDP (%)",
-        "note": "막대 = 군사비 규모 / 주황 선 = GDP 대비 비중",
+        "note": "막대: 군사비 · 선: GDP 대비 군사비(%)",
     },
     "gdp": {
         "label": "GDP",
@@ -2843,7 +2908,7 @@ TREND_METRICS = {
         "accent": None,
         "y_title": "GDP (백만 USD)",
         "y2_title": None,
-        "note": "경제 규모 — 군사비 여력을 가늠하는 맥락 지표",
+        "note": "국가 경제 규모",
     },
     "tiv": {
         "label": "무기수입 점유율 (5년 누적)",
@@ -2855,7 +2920,7 @@ TREND_METRICS = {
         "accent": None,
         "y_title": "무기수입 점유율 (5년, %)",
         "y2_title": None,
-        "note": "최근 5년 누적 무기 이전량의 세계 대비 비중",
+        "note": "최근 5년 누적 무기 수입의 세계 대비 비중",
     },
     "risk": {
         "label": "분쟁위험도",
@@ -2867,7 +2932,7 @@ TREND_METRICS = {
         "accent": None,
         "y_title": "분쟁위험도 (0~10)",
         "y2_title": None,
-        "note": "INFORM Risk 기반 인적 위험 점수",
+        "note": "INFORM 인적 위험 점수 (0~10)",
     },
 }
 
@@ -3464,11 +3529,30 @@ def render_page_strip(page_key, show_country=False):
     )
 
 
+def data_year_text():
+    """배너에 표시할 데이터 기준연도 (DB 데이터에서 자동 계산)"""
+    text = f"데이터 {min_year}–{max_year}"
+
+    risk_years = df.loc[df[COL["risk"]].notna(), COL["year"]]
+
+    if not risk_years.empty:
+        text += (
+            f" · 분쟁위험도 {int(risk_years.min())}"
+            f"–{int(risk_years.max())}"
+        )
+
+    return text
+
+
 def render_banner(page_key):
     """전 페이지 공통 상단 머리글 (재원님 1페이지의 제트기 헤더)"""
     render_html(
         f"""
         <div class="main-header">
+
+            <div class="header-meta">
+                {html.escape(data_year_text())}
+            </div>
 
             <img
                 class="header-jet"
@@ -4011,10 +4095,12 @@ def render_page1():
         margin-top: 7px;
     }}
 
-    .delta-up {{
-        color: #e63636;
+    /* 증가 : 초록 / 감소 : 빨강 (분쟁위험 관련은 아래 risk 클래스) */
+    .delta-up,
+    .delta-risk-down {{
+        color: #198651;
 
-        background: #fff0f0;
+        background: #edf9f1;
 
         padding: 5px 7px;
 
@@ -4026,10 +4112,11 @@ def render_page1():
         white-space: nowrap;
     }}
 
-    .delta-down {{
-        color: #198651;
+    .delta-down,
+    .delta-risk-up {{
+        color: #e63636;
 
-        background: #edf9f1;
+        background: #fff0f0;
 
         padding: 5px 7px;
 
@@ -4839,11 +4926,17 @@ def render_page1():
         .nunique()
     )
 
+    # 고위험 국가 수는 늘어나면 위험 신호이므로 증가 = 빨강
     risk_delta_text, risk_delta_type = count_delta(
         high_risk_count,
         previous_high_risk_count,
         len(previous_df) > 0,
     )
+
+    risk_delta_type = {
+        "up": "risk-up",
+        "down": "risk-down",
+    }.get(risk_delta_type, risk_delta_type)
 
 
     # ============================================================
@@ -5218,8 +5311,11 @@ def render_page1():
 
             if selected_metric == "GDP":
 
+                # GDP도 군사비처럼 백만 USD 단위 → 달러로 바꿔 표시
                 return money_format(
-                    value
+                    military_to_usd(
+                        value
+                    )
                 )
 
 
@@ -5418,6 +5514,10 @@ def render_page1():
 
         fig_map = go.Figure()
 
+        # 레이어별로 필요한 나라만 담은 국경선 (전송량 절감)
+        data_isos = tuple(sorted(set(map_df[ISO_COL])))
+        empty_isos = tuple(sorted(set(WORLD_GEOJSON_IDS) - set(data_isos)))
+
 
         # --------------------------------------------------------
         # 데이터가 없는 국가도 회색으로 보이게 하는 기본 국가 레이어
@@ -5428,17 +5528,17 @@ def render_page1():
             go.Choroplethmap(
 
                 geojson=
-                    WORLD_GEOJSON,
+                    world_geojson_subset(empty_isos),
 
                 featureidkey=
                     "id",
 
                 locations=
-                    WORLD_GEOJSON_IDS,
+                    list(empty_isos),
 
                 z=
                     [0] * len(
-                        WORLD_GEOJSON_IDS
+                        empty_isos
                     ),
 
                 zmin=
@@ -5477,7 +5577,7 @@ def render_page1():
             go.Choroplethmap(
 
                 geojson=
-                    WORLD_GEOJSON,
+                    world_geojson_subset(data_isos),
 
                 featureidkey=
                     "id",
@@ -5575,7 +5675,7 @@ def render_page1():
                 go.Choroplethmap(
 
                     geojson=
-                        WORLD_GEOJSON,
+                        world_geojson_subset((selected_iso,)),
 
                     featureidkey=
                         "id",
@@ -5912,8 +6012,8 @@ def render_page1():
                 p1_html(
                 f"""
                 <div class="chart-description">
-                    국가별 {metric_title} 수준을
-                    연속형 그라데이션으로 비교합니다.
+                    색이 진할수록 {josa(metric_title, "이", "가")} 큽니다.
+                    국가를 클릭하면 선택됩니다.
                 </div>
                 """
                 )
@@ -6236,9 +6336,7 @@ def render_page1():
                 </div>
 
                 <div class="chart-description">
-                    {selected_year}년 기준
-                    {metric_title}가 높은
-                    상위 10개 국가입니다.
+                    막대 길이는 1위 국가 대비 비율입니다.
                 </div>
 
                 {create_top10_html()}
@@ -6644,14 +6742,12 @@ elif st.session_state.app_page == "page3":
 
                     <div class="panel-note">
                         {
-                            html.escape(country_display(country)) + "와"
+                            html.escape(josa(country_display(country), "과", "와"))
                             if has_country
                             else "선택 국가와"
                         }
-                        지표 구조가 비슷한 상위 {SIM_TOP_N}개국 ·
-                        기준 차트 {html.escape(basis_label)} ·
-                        군사비/GDP · 기준지표 · GDP를
-                        z-표준화한 거리
+                        지표가 비슷한 상위 {SIM_TOP_N}개국 ·
+                        군사비/GDP · {html.escape(basis_label)} · GDP 기준
                     </div>
                 </div>
                 """
@@ -6879,10 +6975,9 @@ elif st.session_state.app_page == "page3":
 
                 sim_body += (
                     '<div class="panel-caption">'
-                    "맨 윗줄은 기준 국가입니다. "
-                    "버블차트에서 주황색 테두리는 유사 국가, "
-                    "빨간 테두리는 현재 선택 국가이며, "
-                    "선택된 버블을 다시 클릭하면 선택이 해제됩니다."
+                    "맨 윗줄이 기준 국가 · "
+                    "버블차트 주황 테두리는 유사 국가, "
+                    "빨간 테두리는 선택 국가 (다시 클릭하면 해제)"
                     "</div>"
                 )
 
@@ -6912,10 +7007,8 @@ elif st.session_state.app_page == "page3":
                     </div>
 
                     <div class="panel-note">
-                        {year}년 · 스피어만(순위) 상관계수 ·
-                        별표는 유의수준
-                        (* p&lt;0.05, ** p&lt;0.01, *** p&lt;0.001) ·
-                        쌍별 표본수는 hover{corr_extra}
+                        {year}년 · 스피어만 상관계수 ·
+                        * p&lt;0.05 ** p&lt;0.01 *** p&lt;0.001{corr_extra}
                     </div>
                 </div>
                 """
@@ -7030,7 +7123,7 @@ else:
                 <div class="kpi-text">
                         <div class="kpi-label">GDP ({selected_year})</div>
                         <div class="kpi-row">
-                            <div class="kpi-value">{money_format(p2_gdp)}</div>
+                            <div class="kpi-value">{usd_m_text(p2_gdp)}</div>
                             {delta_html(percent_change(p2_gdp, p2_gdp_prev))}
                         </div>
                 </div>
@@ -7046,7 +7139,7 @@ else:
                 <div class="kpi-text">
                         <div class="kpi-label">군사비 ({selected_year})</div>
                         <div class="kpi-row">
-                            <div class="kpi-value">{money_format(p2_military)}</div>
+                            <div class="kpi-value">{usd_m_text(p2_military)}</div>
                             {delta_html(
                                 percent_change(p2_military, p2_military_prev)
                             )}
@@ -7225,9 +7318,8 @@ else:
                 )
 
     st.caption(
-        "작은 그래프의 제목 버튼을 누르면 해당 지표가 "
-        "왼쪽 메인 그래프로 올라옵니다. "
-        "점선은 사이드바에서 선택한 연도입니다."
+        "작은 그래프 제목을 누르면 큰 그래프로 바뀝니다. "
+        "노란 띠는 선택한 연도입니다."
     )
 
     render_footnote()
