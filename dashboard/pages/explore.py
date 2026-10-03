@@ -2,6 +2,7 @@
 import html
 
 import numpy as np
+import pandas as pd
 import streamlit as st
 
 from dashboard.analysis.candidates import p4_candidate_pool, p4_sort_candidates, p4_value_text
@@ -117,6 +118,8 @@ def render_page4(dataset, sel):
     # 결측치는 0으로 치환해 모든 지표가 같은 국가 수로 비교되게 합니다.
     available_columns = [P4_INDICATORS[label]["column"] for label in available]
     year_data = year_data.copy()
+    # 국가 카드에는 원래 값을 보여 주기 위해 치환 전 값을 따로 보관 (결측은 "-")
+    raw_by_iso = year_data.set_index("Iso3")[available_columns]
     year_data[available_columns] = year_data[available_columns].fillna(0)
 
     # --------------------------------------------------------
@@ -290,9 +293,13 @@ def render_page4(dataset, sel):
                 selected = iso == active_iso
                 with st.container(border=True, key=f"card_p4_country_{iso}"):
                     metric_order = priorities + [x for x in available if x not in priorities]
+                    def card_value(label):
+                        raw = raw_by_iso.at[iso, P4_INDICATORS[label]["column"]]
+                        return "-" if pd.isna(raw) else p4_value_text(label, raw)
+
                     metrics_html = "".join(
                         f'<div class="p4-m"><span>{html.escape(label)}</span>'
-                        f"<b>{html.escape(p4_value_text(label, row[P4_INDICATORS[label]['column']]))}</b></div>"
+                        f"<b>{html.escape(card_value(label))}</b></div>"
                         for label in metric_order
                     )
                     st.markdown(
