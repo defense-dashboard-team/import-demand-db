@@ -5,8 +5,9 @@ from dashboard.config import COUNTRY_NONE, COUNTRY_NONE_LABEL
 from dashboard.utils.countries import country_english
 
 
-def render_top_filters(dataset):
-    """연도·국가 선택 상자. 값이 바뀌면 session_state에 넣고 바로 rerun함."""
+def render_top_filters(dataset, show_country=True):
+    """연도·국가 선택 상자. 값이 바뀌면 session_state에 넣고 바로 rerun함.
+    show_country=False 이면 연도만 표시 (국가를 고를 필요가 없는 화면)."""
     years, countries = dataset.years, dataset.countries
     country_to_iso3 = dataset.country_to_iso3
     country_display = dataset.country_display
@@ -29,6 +30,9 @@ def render_top_filters(dataset):
                 st.session_state.pop("last_click_risk", None)
                 st.session_state.pop("last_click_tiv", None)
                 st.rerun()
+
+        if not show_country:
+            return
 
         with country_col:
             st.markdown("**국가**")

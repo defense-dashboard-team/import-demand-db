@@ -41,7 +41,8 @@ render_sidebar()
 # 연도/국가는 모든 화면에서 동일한 session_state를 사용합니다.
 render_banner(st.session_state.app_page, dataset)
 validate_selection(dataset)
-render_top_filters(dataset)
+# 3페이지(조건별 탐색)는 국가를 고르지 않으므로 연도만 표시
+render_top_filters(dataset, show_country=st.session_state.app_page != "page4")
 
 # 위젯 변경은 rerun 후에 반영되므로 필터를 그린 다음에 현재 선택값을 계산함
 sel = current_selection(dataset)

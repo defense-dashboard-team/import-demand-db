@@ -37,7 +37,10 @@ def render_page4(dataset, sel):
     .st-key-card_p4_filter [data-testid="stMarkdownContainer"]:has(.p4-filter-range) {
         margin-bottom: 0 !important;
     }
-    .p4-result-title {color: #12365e; font-size: 16px; font-weight: 700; margin: 4px 0 2px;}
+    /* 결과 제목: 위(조건 상자)·아래(국가 카드) 간격을 비슷하게 */
+    .p4-result-title {color: #12365e; font-size: 16px; font-weight: 700; margin: 0 0 -16px;}
+    /* 연도 선택 상자와 탐색 조건 상자 사이 간격 줄이기 */
+    .stApp .st-key-card_p4_filter {margin-top: -28px !important;}
     .stApp [class*="st-key-card_p4_country_"] {
         position: relative; padding: 11px 15px !important; cursor: pointer;
         transition: box-shadow .15s, border-color .15s;
@@ -88,18 +91,19 @@ def render_page4(dataset, sel):
     .p4-tip-icon {color: #94A3B8; font-size: 14px; font-weight: 600; margin-left: 2px;}
     .p4-tip:hover::after {
         content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 6px);
-        z-index: 20; width: max-content; max-width: 360px; padding: 8px 12px;
-        background: #0F172A; color: #fff; font-size: 12px; line-height: 1.5;
-        border-radius: 8px; box-shadow: 0 4px 14px rgba(15, 23, 42, .2);
+        z-index: 20; width: max-content; max-width: 360px; padding: 7px 11px;
+        background: #F8FAFC; color: #475569; font-size: 12px; line-height: 1.5;
+        border: 1px solid #E2E8F0; border-radius: 8px; box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
     }
     [class*="st-key-p4_axis_box"] {position: relative;}
     [class*="st-key-p4_axis_box"] [data-testid="stElementContainer"]:has(.p4-log-tip) {
-        position: absolute !important; right: 0; top: calc(100% + 4px); width: 280px !important;
+        position: absolute !important; right: 0; top: calc(100% + 4px); width: max-content !important;
         z-index: 20; pointer-events: none; opacity: 0; transition: opacity .12s;
     }
     [class*="st-key-p4_axis_box"]:hover [data-testid="stElementContainer"]:has(.p4-log-tip) {opacity: 1;}
-    .p4-log-tip {padding: 8px 12px; background: #0F172A; color: #fff; font-size: 12px;
-        line-height: 1.5; border-radius: 8px; box-shadow: 0 4px 14px rgba(15, 23, 42, .2);}
+    .p4-log-tip {display: inline-block; padding: 7px 11px; background: #F8FAFC; color: #475569; font-size: 12px;
+        line-height: 1.5; white-space: nowrap; border: 1px solid #E2E8F0; border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, .08);}
     </style>""", unsafe_allow_html=True)
 
     year_data = p4_candidate_pool(df, selected_year)
@@ -126,7 +130,7 @@ def render_page4(dataset, sel):
                 '탐색 목적에 맞게 우선순위를 직접 바꿔 보세요.">'
                 '<div class="panel-title-inline">탐색 조건 <span class="p4-tip-icon">ⓘ</span></div>'
                 f'<div class="panel-note">{selected_year}년 {len(year_data)}개국 기준 '
-                '(결측치는 0으로 처리) · 우선순위 순서대로 정렬</div>'
+                '· 우선순위 순서대로 정렬</div>'
                 '</div>'
             )
         with mode_col:
@@ -170,11 +174,8 @@ def render_page4(dataset, sel):
                 column = P4_INDICATORS[label]["column"]
                 values = pool[column].dropna()
 
-                directions[label] = st.radio(
-                    f"{label} 정렬", P4_DIRECTIONS, horizontal=True,
-                    key=f"p4_direction_{label}",
-                    label_visibility="collapsed",
-                )
+                # 모든 지표는 내림차순(큰 값부터)으로 정렬
+                directions[label] = "내림차순"
 
                 if values.empty:
                     pool = pool.iloc[:0]
@@ -336,8 +337,7 @@ def render_page4(dataset, sel):
                                 with st.container(key=f"p4_axis_box_{column}"):
                                     log_axis = st.toggle("로그", key=f"p4_log_{column}")
                                     st.markdown(
-                                        '<div class="p4-log-tip">국가 간 규모 차이가 커서 작은 나라의 선이 '
-                                        '바닥에 붙어 보일 때, 로그 축으로 바꾸면 증감 흐름을 함께 비교할 수 있어요.</div>',
+                                        '<div class="p4-log-tip">규모 차이가 큰 국가들의 증감 흐름을 함께 볼 때 사용</div>',
                                         unsafe_allow_html=True,
                                     )
                         else:
