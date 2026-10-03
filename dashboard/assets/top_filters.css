@@ -1,0 +1,29 @@
+.stApp .st-key-top_filters {
+    margin: 4px 0 14px !important;
+    padding: 12px 20px 14px !important;
+    border: 1px solid #CDDDEC !important;
+    border-radius: 9px !important;
+    background: #F7FAFF !important;
+    box-shadow: 0 2px 9px rgba(19, 58, 102, 0.045) !important;
+}
+.stApp .st-key-top_filters [data-testid="stMarkdownContainer"] p {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: #163F6E !important;
+}
+.stApp .st-key-top_filters [data-testid="stSelectbox"] {
+    min-width: 0;
+}
+.stApp .st-key-top_filters [data-baseweb="select"] > div {
+    background: #FFFFFF !important;
+    min-height: 42px !important;
+    border-color: #C7D7EA !important;
+    border-radius: 7px !important;
+}
+.stApp .st-key-top_filters [data-baseweb="select"] > div:focus-within {
+    border-color: #2468AF !important;
+    box-shadow: 0 0 0 2px rgba(36,104,175,.12) !important;
+}
+@media (max-width: 900px) {
+    .stApp .st-key-top_filters {padding: 11px 12px !important;}
+}

@@ -1,0 +1,677 @@
+
+/* =========================================================
+페이지 제목 / 연도
+========================================================= */
+
+.page-title {
+    margin-top: 20px;
+    margin-bottom: 8px;
+
+    font-size: 33px;
+    font-weight: 900;
+
+    color: #071f62;
+
+    letter-spacing: -1px;
+}
+
+.year-label {
+    color: #071f62;
+
+    font-size: 17px;
+    font-weight: 900;
+
+    padding-top: 9px;
+}
+
+
+/* =========================================================
+KPI
+========================================================= */
+
+.p1-kpi-card {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 132px;
+    height: 132px;
+    padding: 9px 11px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    align-content: center;
+    gap: 5px;
+    background: white;
+    border: 1px solid #dce6f0;
+    border-radius: 12px;
+}
+.p1-kpi-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+.kpi-icon {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #edf6ff;
+    font-size: 18px;
+}
+.kpi-name {
+    min-width: 0;
+    color: #092365;
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.28;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+}
+.p1-kpi-value-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 7px;
+    row-gap: 3px;
+    min-width: 0;
+    max-width: 100%;
+}
+.p1-kpi-value {
+    min-width: 0;
+    max-width: 100%;
+    color: #092365;
+    font-size: clamp(18px, 1.55vw, 23px);
+    font-weight: 850;
+    letter-spacing: -0.5px;
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+}
+.p1-kpi-value-row [class^="delta-"] {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    white-space: normal !important;
+    font-size: 10px;
+    line-height: 1.25;
+    text-align: left;
+}
+.kpi-description {
+    min-width: 0;
+    max-width: 100%;
+    margin-top: 0;
+    color: #687b97;
+    font-size: 10.5px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+}
+
+@media (max-width: 1100px) {
+    .p1-kpi-card {
+        height: auto;
+        min-height: 132px;
+    }
+}
+/* 증가 : 초록 / 감소 : 빨강 (분쟁위험 관련은 아래 risk 클래스) */
+.delta-up,
+.delta-risk-down {
+    color: #198651;
+
+    background: #edf9f1;
+
+    padding: 5px 7px;
+
+    border-radius: 6px;
+
+    font-size: 11px;
+    font-weight: 800;
+
+    white-space: nowrap;
+}
+
+.delta-down,
+.delta-risk-up {
+    color: #e63636;
+
+    background: #fff0f0;
+
+    padding: 5px 7px;
+
+    border-radius: 6px;
+
+    font-size: 11px;
+    font-weight: 800;
+
+    white-space: nowrap;
+}
+
+.delta-same {
+    color: #586b7e;
+
+    background: #e8edf3;
+
+    border: 1px solid #d1dbe5;
+
+    padding: 5px 7px;
+
+    border-radius: 6px;
+
+    font-size: 11px;
+    font-weight: 800;
+
+    white-space: nowrap;
+}
+
+.p1-delta-neutral {
+    color: #718096;
+
+    background: #f1f4f7;
+
+    padding: 5px 7px;
+
+    border-radius: 6px;
+
+    font-size: 11px;
+    font-weight: 700;
+
+    white-space: nowrap;
+}
+
+
+/* =========================================================
+큰 분석 영역
+========================================================= */
+
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: white;
+
+    border: 1px solid #d6e2ed !important;
+    border-radius: 13px !important;
+
+    box-shadow:
+        0 2px 8px
+        rgba(20,60,100,0.025) !important;
+}
+
+
+/* =========================================================
+분석 지표 선택 - 원형 라디오 없이 이어진 4개 버튼
+========================================================= */
+
+.metric-selector-label {
+    color: #082365;
+
+    font-size: 15px;
+    font-weight: 900;
+
+    padding-top: 8px;
+
+    white-space: nowrap;
+}
+
+
+/* Streamlit segmented_control */
+div[data-testid="stSegmentedControl"] {
+    width: 100% !important;
+}
+
+div[data-testid="stSegmentedControl"] > div {
+    width: 100% !important;
+
+    gap: 0 !important;
+}
+
+div[data-testid="stSegmentedControl"] button {
+    min-width: 128px !important;
+
+    min-height: 38px !important;
+
+    margin: 0 !important;
+
+    border-radius: 0 !important;
+
+    border-color: #ceddea !important;
+
+    color: #082365 !important;
+
+    background: #f8fbfe !important;
+
+    font-size: 13px !important;
+    font-weight: 800 !important;
+
+    box-shadow: none !important;
+}
+
+div[data-testid="stSegmentedControl"] button:first-child {
+    border-radius: 8px 0 0 8px !important;
+}
+
+div[data-testid="stSegmentedControl"] button:last-child {
+    border-radius: 0 8px 8px 0 !important;
+}
+
+div[data-testid="stSegmentedControl"] button:hover {
+    background: #eef6fd !important;
+}
+
+/* 선택된 버튼 */
+div[data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+    position: relative;
+
+    z-index: 2;
+
+    color: white !important;
+
+    background:
+        linear-gradient(
+            180deg,
+            #2788e8,
+            #075dab
+        ) !important;
+
+    border-color: #1269b7 !important;
+}
+
+div[data-testid="stSegmentedControl"] button[aria-pressed="true"] * {
+    color: white !important;
+}
+
+
+/* 혹시 Streamlit 버전별 내부 구조에서 radio 요소가 남더라도 숨김 */
+div[data-testid="stSegmentedControl"] input[type="radio"],
+div[data-testid="stSegmentedControl"] [role="radio"] > div:first-child {
+    display: none !important;
+}
+
+
+/* =========================================================
+지도 제목 / 현재 선택
+========================================================= */
+
+.map-heading {
+    width: 100%;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 15px;
+}
+
+.chart-title {
+    color: #082365;
+
+    font-size: 21px;
+    font-weight: 900;
+
+    margin-top: 4px;
+    margin-bottom: 3px;
+}
+
+.chart-description {
+    color: #60738d;
+
+    font-size: 13px;
+
+    margin-bottom: 4px;
+}
+
+.current-country-pill {
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    color: #082365;
+
+    background: #f8fbff;
+
+    border: 1px solid #cfdeeb;
+
+    border-radius: 9px;
+
+    padding: 7px 11px;
+
+    font-size: 12px;
+    font-weight: 800;
+
+    white-space: nowrap;
+}
+
+.current-country-flag {
+    font-size: 19px;
+}
+
+
+/* =========================================================
+그라데이션 범례
+========================================================= */
+
+.legend-title {
+    color: #082365;
+
+    font-size: 16px;
+    font-weight: 900;
+
+    margin-top: 25px;
+    margin-bottom: 2px;
+
+    text-align: center;
+}
+
+.legend-subtitle {
+    color: #74849a;
+
+    font-size: 11px;
+
+    text-align: center;
+
+    margin-bottom: 12px;
+}
+
+.legend-scale {
+    position: relative;
+
+    /* 범례 열의 실제 너비 안에 색상 막대와 수치를 함께 넣습니다. */
+    width: 100%;
+    max-width: 150px;
+    min-width: 0;
+    height: 330px;
+    box-sizing: border-box;
+
+    margin: 0 auto;
+}
+
+.legend-gradient {
+    position: absolute;
+
+    left: 2px;
+    top: 0;
+
+    width: 23px;
+    height: 330px;
+    box-sizing: border-box;
+
+    border-radius: 5px;
+
+    border: 1px solid #a9c8df;
+
+    background:
+        linear-gradient(
+            180deg,
+            #073970 0%,
+            #126db4 25%,
+            #3294d0 50%,
+            #77c1e7 75%,
+            #d9f0fb 100%
+        );
+}
+
+/* 경계선 */
+.legend-tick {
+    position: absolute;
+
+    left: 25px;
+
+    width: 9px;
+
+    border-top: 1px solid #91afc8;
+}
+
+/* 경계선 오른쪽 숫자 */
+.legend-tick-label {
+    position: absolute;
+
+    left: 37px;
+    right: 1px;
+    min-width: 0;
+    box-sizing: border-box;
+
+    color: #082365;
+
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1.2;
+    text-align: left;
+
+    /* 군사비 수치가 길어도 범례 열 밖으로 넘치지 않도록 */
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+}
+
+.legend-max-line {
+    top: 0;
+}
+
+.legend-75-line {
+    top: 25%;
+}
+
+.legend-50-line {
+    top: 50%;
+}
+
+.legend-25-line {
+    top: 75%;
+}
+
+.legend-zero-line {
+    top: 100%;
+}
+
+.legend-max-label {
+    top: 0;
+    transform: translateY(-15%);
+}
+
+.legend-75-label {
+    top: 25%;
+    transform: translateY(-50%);
+}
+
+.legend-50-label {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.legend-25-label {
+    top: 75%;
+    transform: translateY(-50%);
+}
+
+.legend-zero-label {
+    top: 100%;
+    transform: translateY(-95%);
+}
+
+
+/* =========================================================
+TOP10
+========================================================= */
+
+.top10-wrapper {
+    margin-top: 10px;
+    width: 100%;
+
+    /* 지도와 우측 Top10의 전체 본문 높이를 유지 */
+    min-height: 455px;
+}
+
+/* 국가 정보/수치를 윗줄에, 막대를 아래 전체 폭에 배치.
+   세계지도 면적은 그대로 두고 실제 막대의 가로 길이를 확보합니다. */
+.top10-row {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 28px 32px minmax(0, 1fr) max-content;
+    grid-template-rows: 27px 14px;
+    column-gap: 7px;
+    row-gap: 3px;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.top10-row > .p1-rank-number {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.top10-row > div:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.p1-rank-number {
+    width: 28px;
+    height: 28px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #f0f5fa;
+
+    color: #082365;
+
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.country-flag {
+    width: 30px;
+    height: 20px;
+
+    display: block;
+
+    object-fit: cover;
+
+    border: 1px solid #d8e1e8;
+    border-radius: 2px;
+}
+
+.flag-placeholder {
+    width: 30px;
+    height: 20px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 18px;
+}
+
+.current-country-pill .country-flag {
+    width: 24px;
+    height: 16px;
+}
+
+.p1-country-name {
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 0;
+    color: #082365;
+
+    font-size: 13px;
+    font-weight: 800;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.top10-bar-background {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    /* 직전 버전보다 막대를 살짝 줄이고 좌우 여백을 균등하게 둡니다. */
+    width: 92%;
+    margin: 0 auto;
+    height: 14px;
+
+    background: #edf3f8;
+
+    border-radius: 3px;
+
+    overflow: hidden;
+}
+
+.top10-bar-fill {
+    height: 100%;
+
+    background:
+        linear-gradient(
+            90deg,
+            #55b4f7 0%,
+            #1688e9 58%,
+            #075daf 100%
+        );
+
+    border-radius: 3px;
+}
+
+.top10-value {
+    grid-column: 4;
+    grid-row: 1;
+    color: #082365;
+
+    font-size: 12px;
+    font-weight: 900;
+
+    text-align: right;
+
+    white-space: nowrap;
+}
+
+
+/* =========================================================
+다음 페이지
+========================================================= */
+
+.next-description {
+    color: #6c7e97;
+
+    font-size: 12px;
+
+    margin-bottom: 5px;
+
+    text-align: right;
+}
+
+div[data-testid="stButton"] > button {
+    min-height: 50px;
+
+    background:
+        linear-gradient(
+            90deg,
+            #1763b1,
+            #2b7fc8
+        );
+
+    color: white;
+
+    border: none;
+    border-radius: 10px;
+
+    font-size: 15px;
+    font-weight: 800;
+}
+
+div[data-testid="stButton"] > button:hover {
+    background: #14599e;
+
+    color: white;
+
+    border: none;
+}
+

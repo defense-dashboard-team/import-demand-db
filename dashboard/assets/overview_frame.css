@@ -1,0 +1,98 @@
+/* 두 화면이 들어가는 공통 바깥 틀 */
+.stApp .st-key-overview_frame {
+    position: relative !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 755px;
+    margin-top: 16px !important;
+    padding: 22px 18px 20px !important;
+    overflow: visible !important;
+    background: #FFFFFF !important;
+    border: 1px solid #CEDDEC !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 12px rgba(23, 52, 89, 0.055) !important;
+}
+
+/* 배너/사이드바 높이가 바뀌어도 책갈피가 상단 테두리에 걸리도록 */
+.stApp .st-key-overview_frame .st-key-overview_bookmarks {
+    position: relative !important;
+    z-index: 3;
+    margin-top: -41px !important;
+    margin-bottom: 17px !important;
+    padding-left: 0 !important;
+    width: max-content !important;
+    max-width: 100%;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stSegmentedControl"],
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stSegmentedControl"] > div {
+    width: max-content !important;
+    max-width: 100% !important;
+    gap: 7px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 각 라벨을 위가 둥글고 아래가 평평한 책갈피 탭으로 표시 */
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stSegmentedControl"] button,
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stButtonGroup"] button {
+    position: relative !important;
+    min-width: 108px !important;
+    min-height: 38px !important;
+    margin: 0 !important;
+    padding: 7px 20px !important;
+    border: 1px solid #CEDDEC !important;
+    border-bottom: 2px solid #CEDDEC !important;
+    border-radius: 10px 10px 1px 1px !important;
+    color: #345274 !important;
+    background: #EAF1F8 !important;
+    box-shadow: none !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
+}
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stSegmentedControl"] button:hover {
+    background: #DCEAF8 !important;
+}
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stSegmentedControl"] button[aria-pressed="true"],
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stSegmentedControl"] button[aria-checked="true"],
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stButtonGroup"] button[aria-pressed="true"],
+.stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stButtonGroup"] button[aria-checked="true"] {
+    background: #135CA9 !important;
+    border-color: #135CA9 !important;
+    color: white !important;
+    box-shadow: 0 3px 5px rgba(11,70,134,.15) !important;
+}
+.stApp .st-key-overview_frame .st-key-overview_bookmarks button[aria-pressed="true"] *,
+.stApp .st-key-overview_frame .st-key-overview_bookmarks button[aria-checked="true"] * {
+    color: white !important;
+}
+
+/* 지도의 기존 내부 투명 컨테이너: 바깥 흰색 틀과 이중 테두리가 생기지 않도록 */
+.stApp .st-key-overview_frame .st-key-plain_p1_outer {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+/* 화면 폭이 줄어들면 탭이 겹치지 않도록 너비와 여백만 축소 */
+@media (max-width: 900px) {
+    .stApp .st-key-overview_frame {
+        padding: 18px 10px !important;
+        min-height: 0;
+    }
+    .stApp .st-key-overview_frame .st-key-overview_bookmarks {
+        margin-top: -37px !important;
+        margin-bottom: 14px !important;
+    }
+    .stApp .st-key-overview_frame .st-key-overview_bookmarks div[data-testid="stSegmentedControl"] button {
+        min-width: 89px !important;
+        padding: 6px 13px !important;
+    }
+}

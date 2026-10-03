@@ -1,0 +1,553 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+:root {
+    --ui-font: "Pretendard Variable", Pretendard, -apple-system,
+        "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    --ink: #0F172A;
+    --ink-2: #334155;
+    --muted: #64748B;
+    --line: #E6ECF3;
+    --bg: #F3F6FA;
+    --card: #FFFFFF;
+    --primary: #2563EB;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+              0 4px 14px rgba(15, 23, 42, 0.05);
+}
+
+/* ---------- 글꼴 / 바탕 ---------- */
+
+.stApp,
+.stApp p,
+.stApp div,
+.stApp label,
+.stApp button,
+.stApp input,
+.stApp th,
+.stApp td,
+.stApp span:not([data-testid="stIconMaterial"]) {
+    font-family: var(--ui-font) !important;
+}
+
+.stApp {
+    background: var(--bg) !important;
+}
+
+/* 화면 맨 위로 올리는 0px 스크립트가 위쪽 틈(16px)을 만들지 않도록
+   (스크립트는 숨겨도 그대로 실행됩니다) */
+[data-testid="stElementContainer"]:has(iframe[height="0"]),
+[data-testid="stElementContainer"]:has(> iframe[srcdoc]) {
+    display: none !important;
+}
+
+/* 다시 계산하는 동안 화면이 반투명하게 흐려지는 Streamlit 기본 효과 끄기 */
+[data-stale="true"],
+.stale-element,
+[data-testid="stElementContainer"][data-stale="true"] {
+    opacity: 1 !important;
+    transition: none !important;
+    filter: none !important;
+}
+
+/* ---------- 카드 (테두리 있는 패널 → 흰 카드 한 겹) ---------- */
+
+.stApp [class*="st-key-card_"] {
+    background: var(--card) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow);
+    padding: 18px 20px !important;
+}
+
+/* 1페이지 지도+TOP10을 감싸던 바깥 상자는 상자 없이 */
+.stApp .st-key-plain_p1_outer {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+
+/* 같은 줄에 나란히 놓인 카드는 높이를 똑같이 (짧은 카드가 늘어남) */
+[data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+    > [data-testid="stLayoutWrapper"]:only-child:has(> [class*="st-key-card_"]) {
+    flex: 1 1 auto;
+}
+
+[data-testid="stColumn"] > [data-testid="stVerticalBlock"]
+    > [data-testid="stLayoutWrapper"]:only-child > [class*="st-key-card_"] {
+    flex: 1 1 auto;
+}
+
+/* ---------- 1페이지 지표 선택 (세그먼트 버튼) ---------- */
+
+.stApp [data-testid="stButtonGroup"] button {
+    border-color: var(--line) !important;
+    background: var(--card) !important;
+    color: var(--ink-2) !important;
+    font-weight: 500 !important;
+}
+
+.stApp [data-testid="stButtonGroup"] button[aria-checked="true"] {
+    background: var(--primary) !important;
+    border-color: var(--primary) !important;
+    color: #FFFFFF !important;
+    font-weight: 600 !important;
+}
+
+.stApp [data-testid="stButtonGroup"] button[aria-checked="true"] * {
+    color: #FFFFFF !important;
+}
+
+/* 라디오 선택 점 : Streamlit 기본 빨강 → 파랑 */
+.stApp [data-testid="stRadio"] label:has(input:checked) > div > div:first-child {
+    background: var(--primary) !important;
+    border-color: var(--primary) !important;
+}
+
+/* ---------- 제목 / 본문 글자 ---------- */
+
+.stApp .page-title {
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+    letter-spacing: -0.4px !important;
+}
+
+/* 페이지 제목을 기존 제트기 배너 제목(36px, 800)과 같은 크기로 표시. */
+.stApp .page-main-title {
+    color: #12365e !important;
+    font-size: 36px !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    letter-spacing: -1.5px !important;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+/* 두 번째 페이지에서 선택 국가 칩이 긴 제목과 겹치지 않도록 줄바꿈 허용. */
+.stApp .page-strip {
+    min-height: 64px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding-top: 6px;
+    padding-bottom: 7px;
+}
+
+@media (max-width: 1050px) {
+    .stApp .page-main-title { font-size: 30px !important; }
+}
+@media (max-width: 680px) {
+    .stApp .page-main-title { font-size: 26px !important; }
+}
+
+.stApp .page-title {
+    margin-top: 22px !important;
+    margin-bottom: 10px !important;
+}
+
+.stApp .panel-title,
+.stApp .panel-title-inline,
+.stApp .chart-title {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+    letter-spacing: -0.2px !important;
+}
+
+.stApp .panel-note,
+.stApp .panel-caption,
+.stApp .chart-subtitle {
+    color: var(--muted) !important;
+}
+
+/* ---------- KPI 카드 (1·2페이지 같은 모양) ---------- */
+
+.stApp .kpi-card,
+.stApp .p1-kpi-card {
+    background: var(--card) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.stApp .kpi-label {
+    color: var(--muted) !important;
+    font-weight: 600 !important;
+}
+
+.stApp .kpi-value,
+.stApp .p1-kpi-value {
+    font-weight: 700 !important;
+    letter-spacing: -0.5px !important;
+}
+
+.stApp .country-name {
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+}
+
+/* 2페이지 KPI : 1페이지처럼 왼쪽 동그란 아이콘 */
+.stApp .kpi-has-icon {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    container-type: inline-size;
+}
+
+/* 카드가 좁으면 (작은 화면) 아이콘을 숨겨 글자 자리를 확보 */
+@container (max-width: 220px) {
+    .stApp .kpi-icon2 {
+        display: none !important;
+    }
+}
+
+.stApp .kpi-icon2 {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #EEF4FF;
+    font-size: 21px;
+}
+
+.stApp .kpi-text {
+    flex: 1;
+    min-width: 0;
+}
+
+/* KPI 수치 색 통일 (증감 색으로 방향을 보여주므로 수치는 차분한 남색) */
+.stApp .kpi-lg .kpi-value {
+    color: #0F2A4A !important;
+}
+
+/* ---------- 국가별 KPI: 기존 6개를 여백 적은 동일 높이로 표시 ---------- */
+.stApp .kpi-card.kpi-lg {
+    box-sizing: border-box !important;
+    width: 100%;
+    height: 100px;
+    min-height: 100px;
+    padding: 7px 9px !important;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.stApp .kpi-card.kpi-lg:not(.kpi-has-icon) {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 5px;
+}
+.stApp .kpi-card.kpi-lg .kpi-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+}
+.stApp .kpi-card.kpi-lg .kpi-label {
+    margin-bottom: 2px;
+    font-size: 11px;
+    line-height: 1.25;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+}
+.stApp .kpi-card.kpi-lg .kpi-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
+}
+.stApp .kpi-card.kpi-lg .kpi-value {
+    font-size: clamp(15px, 1.4vw, 21px);
+    line-height: 1.15;
+    max-width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.stApp .kpi-card.kpi-lg .kpi-row .delta-positive,
+.stApp .kpi-card.kpi-lg .kpi-row .delta-negative,
+.stApp .kpi-card.kpi-lg .kpi-row .delta-neutral {
+    font-size: 10.5px;
+    line-height: 1.25;
+    margin-top: 0;
+    white-space: normal;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+.stApp .kpi-card.kpi-lg .country-kpi {
+    min-width: 0;
+    flex-wrap: wrap;
+    margin-top: 1px;
+    gap: 5px;
+}
+.stApp .kpi-card.kpi-lg .country-name {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+}
+.stApp .kpi-card.kpi-lg.kpi-has-icon .kpi-icon2 {
+    flex: 0 0 29px;
+    min-width: 29px;
+    width: 29px;
+    height: 29px;
+    font-size: 15px;
+}
+@container (max-width: 225px) {
+    .stApp .kpi-card.kpi-lg.kpi-has-icon .kpi-icon2 {
+        display: none !important;
+    }
+}
+/* 여섯 칸이 좁아지는 중간 화면에서만 여유를 조금 더 확보 */
+@media (max-width: 1100px) {
+    .stApp .kpi-card.kpi-lg {
+        height: 120px;
+        min-height: 120px;
+    }
+}
+@media (max-width: 700px) {
+    .stApp .kpi-card.kpi-lg {
+        height: 110px;
+        min-height: 110px;
+    }
+}
+/* 세계지도 / 지표 상위 10개국: 카드와 본문 높이를 동일하게 맞춤. */
+.stApp .st-key-card_p1_map,
+.stApp .st-key-card_p1_top10 {
+    box-sizing: border-box !important;
+    min-height: 555px;
+    height: 100%;
+    padding: 14px 13px !important;
+}
+/* 작은 화면에서 좌우 카드가 위아래로 배치될 때 내용 잘림을 방지 */
+@media (max-width: 760px) {
+    .stApp .st-key-card_p1_map,
+    .stApp .st-key-card_p1_top10 {
+        height: auto;
+        min-height: 0;
+    }
+}
+/* 지도 확대·축소는 휠로만 사용: 내장 +/- 버튼 막대는 화면에서 숨김.
+   버튼 노드는 유지하므로 기존 휠 확대·축소 로직이 그대로 작동합니다. */
+.stApp .st-key-card_p1_map .js-plotly-plot .modebar-container,
+.stApp .st-key-card_p1_map .js-plotly-plot .modebar {
+    display: none !important;
+}
+/* 기존 자동 복구 버튼은 화면에 표시하지 않음 */
+
+/* ---------- 배너 오른쪽 위 : 데이터 기준연도 ---------- */
+
+.stApp .header-meta {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    z-index: 10;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(4, 30, 58, 0.45);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1px;
+    backdrop-filter: blur(2px);
+}
+
+/* ---------- 1페이지 지도 범례 : 선택 국가 위치 ---------- */
+
+.stApp .legend-marker {
+    position: absolute;
+    left: 0;
+    width: 29px;
+    border-top: 3px solid #F59E0B;
+    transform: translateY(-1.5px);
+    z-index: 3;
+    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9));
+}
+
+/* 막대 왼쪽 작은 화살표 */
+.stApp .legend-marker::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: -6.5px;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 7px solid #F59E0B;
+}
+
+.stApp .legend-marker-label {
+    position: absolute;
+    left: 35px;
+    right: 1px;
+    min-width: 0;
+    box-sizing: border-box;
+    transform: translateY(-50%);
+    z-index: 4;
+    padding: 3px 4px;
+    background: #FFF7E8;
+    border: 1px solid #F5C26B;
+    border-radius: 7px;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    line-height: 1.2;
+}
+
+.stApp .legend-marker-name {
+    color: #92400E;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.stApp .legend-marker-value {
+    color: #7C2D12;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* ---------- 유사 국가 표 ---------- */
+
+.stApp .similarity-table {
+    border: 1px solid var(--line) !important;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.stApp .similarity-table thead th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: #F5F8FC !important;
+    color: var(--muted) !important;
+    font-weight: 600 !important;
+    border-color: var(--line) !important;
+}
+
+.stApp .similarity-table tbody td {
+    font-weight: 500 !important;
+    color: var(--ink-2) !important;
+    border-color: #EEF2F7 !important;
+}
+
+.stApp .similarity-table .sim-country {
+    font-weight: 600 !important;
+    color: var(--ink) !important;
+}
+
+.stApp .similarity-table tbody tr.sim-base-row td {
+    background: #F1F6FE !important;
+    border-bottom: 1px solid #D6E4FA !important;
+}
+
+/* ---------- 2페이지 작은 차트 제목 버튼 → 글자 제목 ---------- */
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: 26px !important;
+    padding: 0 2px !important;
+    justify-content: flex-start !important;
+    color: var(--ink-2) !important;
+}
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button > div,
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button > div > span {
+    justify-content: flex-start !important;
+}
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button * {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    text-align: left !important;
+}
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button:hover,
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button:hover * {
+    color: var(--primary) !important;
+}
+
+.stApp [class*="st-key-card_p2_thumb_"] div.stButton > button p::after {
+    content: "  ↗";
+    color: #94A3B8;
+}
+
+/* ---------- 사이드바 ---------- */
+
+section[data-testid="stSidebar"] {
+    background: #0E2440 !important;
+}
+
+section[data-testid="stSidebar"] h3 {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.4px;
+    color: rgba(255, 255, 255, 0.55) !important;
+}
+
+section[data-testid="stSidebar"] div.stButton > button {
+    min-height: 44px !important;
+    border-radius: 10px !important;
+    border: none !important;
+    justify-content: flex-start !important;
+    padding-left: 14px !important;
+}
+
+section[data-testid="stSidebar"] div.stButton > button * {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+}
+
+section[data-testid="stSidebar"] div.stButton > button > div,
+section[data-testid="stSidebar"] div.stButton > button [data-testid="stMarkdownContainer"] {
+    width: 100%;
+    justify-content: flex-start !important;
+    text-align: left !important;
+}
+
+section[data-testid="stSidebar"] button[kind="secondary"] {
+    background: transparent !important;
+    color: rgba(255, 255, 255, 0.72) !important;
+}
+
+section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    background: rgba(255, 255, 255, 0.07) !important;
+    color: #FFFFFF !important;
+}
+
+section[data-testid="stSidebar"] button[kind="primary"] {
+    background: rgba(96, 165, 250, 0.18) !important;
+    color: #FFFFFF !important;
+    box-shadow: inset 3px 0 0 #60A5FA;
+}
+
+section[data-testid="stSidebar"] .sidebar-divider {
+    border-top-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* 사이드바 제목과 메뉴를 미리보기처럼 위쪽으로 정렬합니다.
+   Streamlit 버전별로 적용되는 콘텐츠 컨테이너를 모두 고려합니다. */
+section[data-testid="stSidebar"] > div[data-testid="stSidebarContent"],
+section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"] {
+    padding-top: 8px !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stSidebarUserContent"] > div[data-testid="stVerticalBlock"] {
+    gap: 0.4rem !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"]:has(.sidebar-brand) {
+    margin-bottom: 0 !important;
+}
+section[data-testid="stSidebar"] h3 {
+    margin-top: 0 !important;
+    margin-bottom: 5px !important;
+}
