@@ -163,17 +163,19 @@ def make_page2_line(
 
     # 제목은 패널 헤더(HTML)에서 한 번만 표시합니다.
     fig.update_layout(
+        # 범례를 그림 바로 위에 붙이고 위 여백을 줄여 제목 아래 빈 공간을 줄임
         legend=dict(
             orientation="h",
-            y=1.02,
+            y=1.0,
             x=0,
             yanchor="bottom",
+            font=dict(size=11),
         ),
         height=368,
         margin=dict(
             l=60,
             r=70,
-            t=22,
+            t=4,
             b=48,
         ),
         template="dash_clean",
