@@ -83,6 +83,23 @@ def render_page4(dataset, sel):
        남는 공간은 카드 사이 간격으로 나눕니다. */
     .st-key-p4_country_list {min-height: 783px; display: flex; flex-direction: column;
         justify-content: space-between; gap: 10px;}
+    /* 마우스를 올리면 나타나는 안내 말풍선 */
+    .p4-tip {position: relative; display: inline-block; cursor: help;}
+    .p4-tip-icon {color: #94A3B8; font-size: 14px; font-weight: 600; margin-left: 2px;}
+    .p4-tip:hover::after {
+        content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 6px);
+        z-index: 20; width: max-content; max-width: 360px; padding: 8px 12px;
+        background: #0F172A; color: #fff; font-size: 12px; line-height: 1.5;
+        border-radius: 8px; box-shadow: 0 4px 14px rgba(15, 23, 42, .2);
+    }
+    [class*="st-key-p4_axis_box"] {position: relative;}
+    [class*="st-key-p4_axis_box"] [data-testid="stElementContainer"]:has(.p4-log-tip) {
+        position: absolute !important; right: 0; top: calc(100% + 4px); width: 280px !important;
+        z-index: 20; pointer-events: none; opacity: 0; transition: opacity .12s;
+    }
+    [class*="st-key-p4_axis_box"]:hover [data-testid="stElementContainer"]:has(.p4-log-tip) {opacity: 1;}
+    .p4-log-tip {padding: 8px 12px; background: #0F172A; color: #fff; font-size: 12px;
+        line-height: 1.5; border-radius: 8px; box-shadow: 0 4px 14px rgba(15, 23, 42, .2);}
     </style>""", unsafe_allow_html=True)
 
     year_data = p4_candidate_pool(df, selected_year)
@@ -93,11 +110,10 @@ def render_page4(dataset, sel):
         return
     if "분쟁위험도" not in available:
         st.info(f"분쟁위험도는 {RISK_START}년부터 제공되어 {selected_year}년에는 선택 목록에서 제외했습니다.")
-    # 사용 가능한 지표 자료가 모두 있는 국가만 후보로 둡니다
-    # (자료가 빠진 국가는 카드·그래프에 제대로 표시되지 않으므로).
-    year_data = year_data.dropna(
-        subset=[P4_INDICATORS[label]["column"] for label in available]
-    )
+    # 결측치는 0으로 치환해 모든 지표가 같은 국가 수로 비교되게 합니다.
+    available_columns = [P4_INDICATORS[label]["column"] for label in available]
+    year_data = year_data.copy()
+    year_data[available_columns] = year_data[available_columns].fillna(0)
 
     # --------------------------------------------------------
     # 1. 우선순위 · 정렬 방향 · 구간
@@ -106,9 +122,12 @@ def render_page4(dataset, sel):
         title_col, mode_col = st.columns([4, 1], vertical_alignment="top")
         with title_col:
             render_html(
-                '<div class="panel-title-inline">탐색 조건</div>'
-                f'<div class="panel-note">{selected_year}년 {len(available)}개 지표 자료가 모두 있는 '
-                f'{len(year_data)}개국 기준 · 우선순위 순서대로 정렬</div>'
+                '<div class="p4-tip" data-tip="처음 설정된 지표 순서는 중요도를 뜻하지 않습니다. '
+                '탐색 목적에 맞게 우선순위를 직접 바꿔 보세요.">'
+                '<div class="panel-title-inline">탐색 조건 <span class="p4-tip-icon">ⓘ</span></div>'
+                f'<div class="panel-note">{selected_year}년 {len(year_data)}개국 기준 '
+                '(결측치는 0으로 처리) · 우선순위 순서대로 정렬</div>'
+                '</div>'
             )
         with mode_col:
             with st.container(key="p4_mode_box"):
@@ -234,6 +253,13 @@ def render_page4(dataset, sel):
         f'{total}개국 중 상위 {len(shortlist)}개</div>'
     )
 
+    if len(shortlist) < 5:
+        st.markdown(
+            "<style>.st-key-p4_country_list {min-height: 0 !important; "
+            "justify-content: flex-start !important;}</style>",
+            unsafe_allow_html=True,
+        )
+
     card_colors = {
         iso: P4_COUNTRY_COLORS[i % len(P4_COUNTRY_COLORS)] for i, iso in enumerate(isos)
     }
@@ -309,6 +335,11 @@ def render_page4(dataset, sel):
                             with axis_col:
                                 with st.container(key=f"p4_axis_box_{column}"):
                                     log_axis = st.toggle("로그", key=f"p4_log_{column}")
+                                    st.markdown(
+                                        '<div class="p4-log-tip">국가 간 규모 차이가 커서 작은 나라의 선이 '
+                                        '바닥에 붙어 보일 때, 로그 축으로 바꾸면 증감 흐름을 함께 비교할 수 있어요.</div>',
+                                        unsafe_allow_html=True,
+                                    )
                         else:
                             render_html(f'<div class="panel-title-inline">{html.escape(label)}</div>')
                         st.plotly_chart(

@@ -13,7 +13,7 @@ import streamlit as st
 
 from dashboard.data.dataset import load_dataset
 from dashboard.layout.banner import render_banner
-from dashboard.layout.navigation import render_next_page_button, render_sidebar
+from dashboard.layout.navigation import render_sidebar
 from dashboard.layout.top_filters import render_top_filters
 from dashboard.pages.correlation import render_correlation_view
 from dashboard.pages.explore import render_page4
@@ -57,12 +57,9 @@ if st.session_state.pop("scroll_to_top", False):
 
 if st.session_state.app_page == "page1":
     render_overview(dataset, sel)
-    # 페이지 이동은 어느 탭에서든 패널 아래 동일한 위치에 표시합니다.
-    render_next_page_button("상관분석 →", "page3", key="go_page_3")
 
 elif st.session_state.app_page == "page3":
     render_correlation_view(dataset, sel)
-    render_next_page_button("조건별 국가 탐색 →", "page4", key="go_page_4")
 
 elif st.session_state.app_page == "page4":
     render_page4(dataset, sel)

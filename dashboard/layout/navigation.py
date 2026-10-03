@@ -1,4 +1,4 @@
-"""페이지 이동 : 사이드바 메뉴와 화면 아래 다음 페이지 버튼."""
+"""페이지 이동 : 사이드바 메뉴."""
 import html
 
 import streamlit as st
@@ -28,15 +28,3 @@ def render_sidebar():
             ):
                 if st.session_state.app_page != page_key:
                     go_to_page(page_key)
-
-
-def render_next_page_button(label, page_key, key):
-    """화면 아래 오른쪽의 다음 페이지 버튼"""
-    _, next_page_col = st.columns([8, 2])
-    with next_page_col:
-        if st.button(
-            label,
-            use_container_width=True,
-            key=key,
-        ):
-            go_to_page(page_key)

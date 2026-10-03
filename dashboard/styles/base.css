@@ -53,7 +53,7 @@ footer {
     margin-right: -0.7rem;
     margin-bottom: 10px;
 
-    height: 104px;
+    height: 76px;
 
     padding: 0 48px;
 
@@ -79,7 +79,9 @@ footer {
 .main-header .header-page-title {
     position: absolute;
     z-index: 10;
-    top: 18px;
+    /* 배너 높이 가운데에 제목을 세로 정렬 */
+    top: 50%;
+    transform: translateY(-50%);
     left: 38px;
     right: 15%;
     width: auto;
@@ -105,12 +107,12 @@ footer {
     justify-content: flex-end;
 }
 @media (max-width: 1100px) {
-    .main-header .header-page-title {left: 24px; top: 20px; right: 8%;}
+    .main-header .header-page-title {left: 24px; right: 8%;}
     .main-header .header-page-title .main-title {font-size: clamp(20px, 2.6vw, 29px);}
 }
 @media (max-width: 720px) {
-    .main-header {height: auto; min-height: 104px;}
-    .main-header .header-page-title {left: 18px; top: 17px; right: 16px;}
+    .main-header {height: auto; min-height: 76px;}
+    .main-header .header-page-title {left: 18px; right: 16px;}
     .main-header .header-page-title .main-title {font-size: 23px; line-height: 1.28;}
 }
 

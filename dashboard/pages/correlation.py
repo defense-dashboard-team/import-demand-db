@@ -168,6 +168,9 @@ def render_correlation_view(dataset, sel):
                 if clicked_name == st.session_state.selected_country:
                     deselect_country()
                 else:
+                    # 버블로 국가를 고르면 아래 상세 그래프 토글을 자동으로 펼칩니다.
+                    # (on_change가 실행되지 않으므로 화면 스크롤은 일어나지 않음)
+                    st.session_state.page3_details_open = True
                     sync_clicked_country(clicked_name, country_to_iso3)
 
             if size_col == "current_usd":
