@@ -38,7 +38,7 @@ def render_page4(dataset, sel):
         margin-bottom: 0 !important;
     }
     /* 결과 제목: 위(조건 상자)·아래(국가 카드) 간격을 비슷하게 */
-    .p4-result-title {color: #12365e; font-size: 16px; font-weight: 700; margin: 0 0 -16px;}
+    .p4-result-title {color: #12365e; font-size: 16px; font-weight: 700; margin: 14px 0 -16px;}
     /* 연도 선택 상자와 탐색 조건 상자 사이 간격 줄이기 */
     .stApp .st-key-card_p4_filter {margin-top: -28px !important;}
     .stApp [class*="st-key-card_p4_country_"] {
@@ -126,8 +126,7 @@ def render_page4(dataset, sel):
         title_col, mode_col = st.columns([4, 1], vertical_alignment="top")
         with title_col:
             render_html(
-                '<div class="p4-tip" data-tip="처음 설정된 지표 순서는 중요도를 뜻하지 않습니다. '
-                '탐색 목적에 맞게 우선순위를 직접 바꿔 보세요.">'
+                '<div class="p4-tip" data-tip="초기 지표 순서는 중요도와 무관합니다">'
                 '<div class="panel-title-inline">탐색 조건 <span class="p4-tip-icon">ⓘ</span></div>'
                 f'<div class="panel-note">{selected_year}년 {len(year_data)}개국 기준 '
                 '· 우선순위 순서대로 정렬</div>'

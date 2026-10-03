@@ -214,8 +214,11 @@ def render_correlation_view(dataset, sel):
             font-size: 10px !important; padding: 4px 3px !important;
             white-space: normal !important; line-height: 1.2;
         }
+        /* 표의 위·아래 끝을 왼쪽 시계열 그래프의 그림 영역(범례 아래 ~ x축)과 맞춤 */
+        .st-key-card_p3_sim .panel-body .similarity-wrap { margin-top: 46px; }
+        .st-key-card_p3_sim .similarity-table thead th { height: 32px !important; }
         .st-key-card_p3_sim .similarity-table tbody td {
-            font-size: 11px !important; padding: 3px !important; height: 40px;
+            font-size: 11px !important; padding: 3px !important; height: 37px;
         }
         .st-key-card_p3_sim .sim-progress-bg { min-width: 22px; height: 10px; }
         .st-key-card_p3_sim .sim-score { min-width: 33px; font-size: 11px; }
