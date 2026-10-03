@@ -146,6 +146,34 @@ def scroll_to_top_script():
     )
 
 
+def scroll_to_bottom_script():
+    """펼친 내용이 바로 보이도록 화면을 맨 아래로 내립니다 (차트가 늦게 그려져 몇 번 반복)."""
+    components.html(
+        """
+        <script>
+        const doc = window.parent.document;
+        const scrollBottom = () => {
+            const targets = [
+                doc.querySelector('section.stMain'),
+                doc.querySelector('[data-testid="stMain"]'),
+                doc.querySelector('[data-testid="stAppViewContainer"]'),
+                doc.scrollingElement,
+            ];
+            for (const t of targets) {
+                if (!t) continue;
+                try { t.scrollTo({ top: t.scrollHeight, behavior: 'smooth' }); }
+                catch (e) { t.scrollTop = t.scrollHeight; }
+            }
+        };
+        setTimeout(scrollBottom, 150);
+        setTimeout(scrollBottom, 600);
+        setTimeout(scrollBottom, 1200);
+        </script>
+        """,
+        height=0,
+    )
+
+
 def image_to_data_uri(path):
     path = Path(path)
     if not path.exists():
@@ -1869,7 +1897,11 @@ def load_integrate_raw():
         except Exception as error:
             db_error = str(error)
 
-    path = Path(__file__).resolve().parent / DATA_PATH
+    # app.py 옆에 없으면 저장소의 00_files 폴더에서 찾습니다 (배포 환경용).
+    base_dir = Path(__file__).resolve().parent
+    path = base_dir / DATA_PATH
+    if not path.exists():
+        path = base_dir / "00_files" / DATA_PATH
 
     if not path.exists():
         raise FileNotFoundError(
@@ -2167,7 +2199,7 @@ default_country = (
 default_year = 2025 if 2025 in years else max(years)
 
 if "selected_country" not in st.session_state:
-    st.session_state.selected_country = default_country
+    st.session_state.selected_country = None
 
 if "selected_year" not in st.session_state:
     st.session_state.selected_year = default_year
@@ -3709,22 +3741,11 @@ if (
 ):
     st.session_state.selected_country = default_country
 
-# 국가별 탭에서 국가를 비운 상태면 원래의 기본 선택 국가로 전환합니다.
-if (
-    st.session_state.app_page == "page1"
-    and st.session_state.overview_mode == "국가별"
-    and st.session_state.selected_country is None
-):
-    st.session_state.selected_country = default_country
-    st.session_state.country_widget_version += 1
-    st.session_state.search_widget_version += 1
-    st.rerun()
-
 with st.container(key="top_filters"):
-    year_col, country_col, search_col = st.columns([0.90, 1.65, 2.10], gap="medium")
+    year_col, country_col, _ = st.columns([0.8, 2.2, 2.4], gap="medium")
 
     with year_col:
-        st.markdown("**연도 선택**")
+        st.markdown("**연도**")
         top_year = st.selectbox(
             "연도 선택",
             years,
@@ -3740,61 +3761,40 @@ with st.container(key="top_filters"):
             st.rerun()
 
     with country_col:
-        st.markdown("**국가 선택**")
-        country_options = [COUNTRY_NONE] + countries
-        top_country = st.selectbox(
-            "국가 선택",
-            country_options,
-            index=country_options.index(
-                st.session_state.selected_country
-                if st.session_state.selected_country is not None
-                else COUNTRY_NONE
-            ),
-            format_func=lambda c: (
-                COUNTRY_NONE_LABEL if c == COUNTRY_NONE
-                else f"{country_display(c)} ({country_to_iso3.get(c, '')})"
-            ),
-            key=f"country_select_{st.session_state.country_widget_version}",
-            label_visibility="collapsed",
-        )
-        picked_country = None if top_country == COUNTRY_NONE else top_country
-        if picked_country != st.session_state.selected_country:
-            st.session_state.selected_country = picked_country
-            st.session_state.search_widget_version += 1
-            st.session_state.map_widget_version += 1
-            st.session_state.pop("last_click_risk", None)
-            st.session_state.pop("last_click_tiv", None)
-            st.rerun()
+        st.markdown("**국가**")
 
-    with search_col:
-        st.markdown("**국가 검색**")
-
-        def search_label(country_name):
+        # 선택 상자에 한글·영문·ISO3를 함께 표시해 입력만으로 검색되게 합니다.
+        # (별도의 검색 상자를 두지 않습니다.)
+        def country_option_label(country_name):
+            if country_name == COUNTRY_NONE:
+                return COUNTRY_NONE_LABEL
             return (
                 f"{country_display(country_name)} · "
                 f"{country_english(country_name)} "
                 f"({country_to_iso3.get(country_name, '')})"
             )
 
-        search_to_country = {search_label(c): c for c in countries}
-        searched_country = st.selectbox(
-            "국가 검색",
-            list(search_to_country),
-            index=None,
-            placeholder="🔍 한글·영문 국가명 또는 ISO3 검색...",
-            key=f"country_search_{st.session_state.search_widget_version}",
+        country_options = [COUNTRY_NONE] + countries
+        top_country = st.selectbox(
+            "국가 선택",
+            country_options,
+            index=(
+                country_options.index(st.session_state.selected_country)
+                if st.session_state.selected_country is not None
+                else None
+            ),
+            placeholder="국가 선택 또는 입력",
+            format_func=country_option_label,
+            key=f"country_select_{st.session_state.country_widget_version}",
             label_visibility="collapsed",
         )
-        if searched_country is not None:
-            found_country = search_to_country[searched_country]
-            if found_country != st.session_state.selected_country:
-                st.session_state.selected_country = found_country
-                st.session_state.country_widget_version += 1
-                st.session_state.search_widget_version += 1
-                st.session_state.map_widget_version += 1
-                st.session_state.pop("last_click_risk", None)
-                st.session_state.pop("last_click_tiv", None)
-                st.rerun()
+        picked_country = None if top_country in (None, COUNTRY_NONE) else top_country
+        if picked_country != st.session_state.selected_country:
+            st.session_state.selected_country = picked_country
+            st.session_state.map_widget_version += 1
+            st.session_state.pop("last_click_risk", None)
+            st.session_state.pop("last_click_tiv", None)
+            st.rerun()
 
 # 같은 선택 상태를 사용하는 아래 차트 변수는 위젯 변경 시 rerun 후 갱신됩니다.
 
@@ -5054,28 +5054,9 @@ def render_page1():
         current_iso = str(current_iso).upper()
 
 
-    # 선택 국가가 없거나 이 연도에 데이터가 없으면 기본 국가로 표시
-    if (
-        not current_iso
-        or current_iso not in available_isos
-    ):
-
-        default_iso = country_to_iso3.get(default_country)
-        default_iso = str(default_iso).upper() if default_iso else None
-
-        if default_iso in available_isos:
-            current_iso = default_iso
-
-        elif "ISR" in available_isos:
-            current_iso = "ISR"
-
-        elif available_isos:
-            current_iso = sorted(
-                available_isos
-            )[0]
-
-        else:
-            current_iso = None
+    # 선택 국가가 없거나 이 연도에 데이터가 없으면 선택 없이 표시합니다.
+    if current_iso not in available_isos:
+        current_iso = None
 
 
     st.session_state[
@@ -7167,6 +7148,7 @@ def render_correlation_view():
         "시계열 추이 · 유사 국가 비교 펼치기",
         value=False,
         key="page3_details_open",
+        on_change=lambda: st.session_state.update(p3_scroll_bottom=True),
     )
     if show_details:
         SIM_BODY_H = 368
@@ -7461,314 +7443,352 @@ def render_correlation_view():
                     "</div>"
                 )
 
+        # 토글을 막 켰을 때만 펼친 그래프가 보이도록 화면 맨 아래로 이동합니다.
+        if st.session_state.pop("p3_scroll_bottom", False):
+            scroll_to_bottom_script()
+
 
 
 # ============================================================
-# 3번째 메뉴 · 조건별 무기 수출 대상국 탐색 (기존 1·2페이지는 유지)
+# 3번째 메뉴 · 조건별 무기 수출 대상국 탐색
 # ============================================================
-# 상단 연도는 기존 공통 연도 선택기와 공유합니다.
-# 별도의 예측/임의 가중치 점수를 만들지 않습니다. 우선순위가 높은
-# 지표부터 차례대로 정렬하고, 사용자가 설정한 구간을 모두 만족하는
-# 국가 중 최대 5개를 표시합니다.
+# 상단 연도는 공통 연도 선택기와 공유합니다.
+# 가중치 점수는 만들지 않습니다.
+#  1) 지표별 구간(백분위 또는 실제 값)으로 국가를 거르고
+#  2) 우선순위 지표 값으로 1순위부터 차례로 정렬합니다.
 P4_INDICATORS = {
-    "GDP": {"column": "gdp_calculated", "scale": 1000.0,
-             "unit": "10억 USD", "precision": 1},
-    "군사비": {"column": "current_usd", "scale": 1000.0,
-               "unit": "10억 USD", "precision": 1},
-    "분쟁위험도": {"column": "human_hazard_score", "scale": 1.0,
-                  "unit": "점", "precision": 2},
-    "무기 수입 점유율": {"column": "TIV_5Y_Share", "scale": 1.0,
-                         "unit": "% (5년)", "precision": 3},
+    "무기 수입 점유율": {"column": "TIV_5Y_Share", "kind": "share"},
+    "군사비": {"column": "current_usd", "kind": "money"},
+    "GDP": {"column": "gdp_calculated", "kind": "money"},
+    "분쟁위험도": {"column": "human_hazard_score", "kind": "score"},
 }
-P4_DEFAULT_PRIORITY = ["GDP", "군사비", "무기 수입 점유율", "분쟁위험도"]
-P4_MUTED_COLORS = ["#96A8BC", "#8FAFAD", "#B09EBC", "#BEAFA0", "#96A6AD"]
+P4_DEFAULT_PRIORITY = ["무기 수입 점유율", "군사비", "GDP", "분쟁위험도"]
+P4_DIRECTIONS = ["내림차순", "오름차순"]
+P4_RANGE_MODES = ["백분위", "실제 값"]
+# 실제 값 입력 단위 (GDP·군사비 원자료는 백만 USD → 10억 USD로 입력)
+P4_INPUT_UNITS = {"money": ("10억 USD", 1000.0), "share": ("%", 1.0), "score": ("점", 1.0)}
+# 추출 국가 순서대로 고정 색을 줍니다. 국가 카드의 점 색과 같습니다.
+P4_COUNTRY_COLORS = ["#2563EB", "#F59E0B", "#10B981", "#8B5CF6", "#64748B"]
 
 
-def p4_candidate_pool(source, chosen_year):
-    """선택 연도의 국가별 실제 값을 사용하고 비국가·중복 코드를 방지합니다."""
-    current_data = source.loc[
-        source["Year"] == int(chosen_year),
-        ["Country", "Iso3"] + [v["column"] for v in P4_INDICATORS.values()],
-    ].copy()
-    for label, setting in P4_INDICATORS.items():
-        col = setting["column"]
-        current_data[col] = pd.to_numeric(current_data[col], errors="coerce")
-    current_data = current_data.dropna(subset=["Country", "Iso3"])
-    return current_data.drop_duplicates(subset=["Iso3"], keep="first")
-
-
-def p4_filter_candidates(source_year, priorities, ranges, directions, top_n=5):
-    """조건 교집합 필터 → 사용자 우선순위별 순차 정렬 → 상위 최대 N개."""
-    if not priorities or source_year.empty:
-        return source_year.iloc[:0].copy(), 0
-    working = source_year.copy()
-    for label in priorities:
-        setting = P4_INDICATORS[label]
-        col = setting["column"]
-        scale = setting["scale"]
-        low, high = ranges[label]
-        working = working.loc[
-            working[col].notna()
-            & (working[col] / scale >= low - 1e-8)
-            & (working[col] / scale <= high + 1e-8)
-        ]
-    total = len(working)
-    if working.empty:
-        return working, 0
-    working = working.sort_values(
-        by=[P4_INDICATORS[label]["column"] for label in priorities]
-        + ["Country"],
-        ascending=[directions[label] == "낮은 값 우선" for label in priorities]
-        + [True],
-        kind="mergesort",
-    )
-    return working.head(top_n).reset_index(drop=True), total
+def p4_pct_col(label):
+    return f"pct_{P4_INDICATORS[label]['column']}"
 
 
 def p4_value_text(label, value):
-    """국가 카드에 표시할 단위 및 결측 처리."""
+    """국가 카드·슬라이더 안내에 표시할 값 (원자료 GDP·군사비는 백만 USD)."""
     if value is None or pd.isna(value):
         return "자료 없음"
-    setting = P4_INDICATORS[label]
-    v = float(value) / setting["scale"]
-    digits = setting["precision"]
-    return f"{v:,.{digits}f} {setting['unit']}"
+    kind = P4_INDICATORS[label]["kind"]
+    if kind == "money":
+        return money_format(float(value) * 1_000_000)
+    if kind == "share":
+        return f"{float(value):.2f}%"
+    return f"{float(value):.1f}점"
 
 
-def p4_trend_chart(source, selected_isos, label, active_iso, chosen_year):
-    """해당 지표 하나에 최대 5개국을 중첩 표시, 선택 국가만 선명하게 강조."""
+def p4_candidate_pool(source, chosen_year):
+    """선택 연도의 국가별 값과 지표별 백분위(0~100, 100 = 가장 큰 값)."""
+    columns = [spec["column"] for spec in P4_INDICATORS.values()]
+    data = source.loc[
+        source["Year"] == int(chosen_year), ["Country", "Iso3"] + columns
+    ].copy()
+    data = data.dropna(subset=["Country", "Iso3"])
+    data = data.drop_duplicates(subset=["Iso3"], keep="first")
+    for label, spec in P4_INDICATORS.items():
+        col = spec["column"]
+        data[col] = pd.to_numeric(data[col], errors="coerce")
+        data[p4_pct_col(label)] = data[col].rank(pct=True, method="average") * 100
+    return data
+
+
+def p4_sort_candidates(pool, priorities, directions, top_n=5):
+    """조건을 통과한 국가를 우선순위 지표 값으로 차례 정렬해 상위 최대 N개를 돌려줍니다."""
+    total = len(pool)
+    if not priorities or pool.empty:
+        return pool.iloc[:0].copy(), 0
+    pool = pool.sort_values(
+        [P4_INDICATORS[label]["column"] for label in priorities] + ["Country"],
+        ascending=[directions[label] == "오름차순" for label in priorities] + [True],
+        kind="mergesort",
+    )
+    return pool.head(top_n).reset_index(drop=True), total
+
+
+def p4_trend_chart(source, shortlist_isos, label, active_iso, chosen_year, log_axis):
+    """한 지표에 추출 국가를 겹쳐 그리고 선택 국가만 굵게 강조합니다."""
     spec = P4_INDICATORS[label]
     column = spec["column"]
-    chart = go.Figure()
-    subset = source.loc[source["Iso3"].isin(selected_isos)].copy()
-    # 분쟁위험도는 2017~2025년만 표시합니다. 나머지 지표의 기존 범위는 유지합니다.
-    first_year, last_year = (
-        (2017, 2025) if label == "분쟁위험도"
-        else (int(source["Year"].min()), int(source["Year"].max()))
-    )
-    span = pd.DataFrame({"Year": list(range(first_year, last_year + 1))})
-    has_visible_points = False
+    kind = spec["kind"]
+    use_log = log_axis and kind == "money"
 
-    # 비강조 국가부터 그리고 마지막에 강조 국가를 얹어 가독성 확보
-    plot_order = [iso for iso in selected_isos if iso != active_iso]
-    if active_iso in selected_isos:
-        plot_order.append(active_iso)
+    valid_years = source.loc[source[column].notna(), "Year"]
+    if valid_years.empty:
+        return empty_figure("시계열 자료가 없습니다.", height=300)
+    first_year, last_year = int(valid_years.min()), int(valid_years.max())
+
+    chart = go.Figure()
+    has_points = False
+    # 강조 국가를 마지막에 그려 다른 선 위에 오도록 합니다.
+    plot_order = [iso for iso in shortlist_isos if iso != active_iso] + [active_iso]
 
     for iso in plot_order:
-        d = subset[
-            (subset["Iso3"] == iso)
-            & subset["Year"].between(first_year, last_year)
+        d = source.loc[
+            (source["Iso3"] == iso) & source["Year"].between(first_year, last_year),
+            ["Year", "Country", column],
         ].sort_values("Year")
-        if d.empty:
+        values = pd.to_numeric(d[column], errors="coerce")
+        if use_log:
+            values = values.where(values > 0)
+        if not values.notna().any():
             continue
-        name = country_display(d.iloc[0]["Country"])
-        d = span.merge(d[["Year", column]], on="Year", how="left")
-        vals = pd.to_numeric(d[column], errors="coerce")
-        if not vals.notna().any():
-            continue
-        has_visible_points = True
+        has_points = True
+
         emph = iso == active_iso
-        color = (
-            "#125CB0" if emph
-            else P4_MUTED_COLORS[selected_isos.index(iso) % len(P4_MUTED_COLORS)]
-        )
+        color = P4_COUNTRY_COLORS[shortlist_isos.index(iso) % len(P4_COUNTRY_COLORS)]
+        # 금액은 10억 USD로 그리고, 마우스를 올리면 읽기 쉬운 금액으로 보여 줍니다.
+        y = values / 1000 if kind == "money" else values
+        hover_text = [p4_value_text(label, v) for v in values]
         chart.add_trace(go.Scatter(
-            x=d["Year"], y=vals,
-            name=name, mode="lines+markers" if emph else "lines",
+            x=d["Year"], y=y,
+            name=country_display(d.iloc[0]["Country"]),
+            mode="lines+markers" if emph else "lines",
             connectgaps=False,
-            line={"color": color, "width": 3.5 if emph else 1.6},
-            marker={"size": 5 if emph else 2},
-            opacity=1.0 if emph else 0.46,
-            hovertemplate=(
-                "%{fullData.name}<br>%{x}년 · %{y:,.2f} "
-                + ("백만 USD" if label in ["GDP", "군사비"] else spec["unit"])
-                + "<extra></extra>"
-            ),
+            line={"color": color, "width": 3.4 if emph else 1.4},
+            marker={"size": 5},
+            opacity=1.0 if emph else 0.38,
+            customdata=hover_text,
+            hovertemplate="%{fullData.name}<br>%{x}년 · %{customdata}<extra></extra>",
         ))
 
-    if not has_visible_points:
-        empty = empty_figure("선택 국가의 시계열 자료가 없습니다.", height=320)
-        if label == "분쟁위험도":
-            empty.update_xaxes(
-                visible=True, range=[2016.5, 2025.5],
-                tickmode="array", tickvals=list(range(2017, 2026)),
-                tickangle=-45, tickfont={"size": 9},
-            )
-        return empty
+    if not has_points:
+        return empty_figure("추출 국가의 시계열 자료가 없습니다.", height=300)
 
-    # 기존 원자료의 GDP·군사비는 백만 USD. 범위 설정 패널만 10억 USD로 환산.
-    y_unit = "백만 USD" if label in ["GDP", "군사비"] else spec["unit"]
-    xaxis_options = {
-        "title": None, "range": [first_year - .5, last_year + .5],
-        "fixedrange": True,
-    }
-    if label == "분쟁위험도":
-        xaxis_options.update(
-            tickmode="array", tickvals=list(range(2017, 2026)),
-            tickangle=-45, tickfont={"size": 9},
-        )
+    y_title = {"money": "10억 USD", "share": "%", "score": "점 (0~10)"}[kind]
+    if use_log:
+        y_title += " · 로그"
+    yaxis = {"title": y_title, "fixedrange": True, "automargin": True}
+    if use_log:
+        # 10배 간격(1, 10, 100 …)에만 눈금·격자를 둬서 로그 축 격자가 촘촘해지지 않게
+        yaxis.update(type="log", dtick=1, tickformat=",~g", minor={"showgrid": False})
+    elif kind == "score":
+        yaxis.update(range=[0, 10])
     else:
-        xaxis_options.update(tickmode="linear", dtick=5)
+        yaxis.update(rangemode="tozero",
+                     tickformat=",.0f" if kind == "money" else ",.3~g")
 
+    span = last_year - first_year
     chart.update_layout(
-        template="dash_clean", height=320,
+        template="dash_clean", height=300,
         font={"family": CHART_FONT, "size": 11},
-        margin={"l": 54, "r": 12, "t": 32, "b": 34},
-        xaxis=xaxis_options,
-        yaxis={"title": y_unit, "tickformat": ",.2~s", "rangemode": "tozero",
-               "fixedrange": True, "automargin": True},
-        legend={"orientation": "h", "y": 1.03, "x": 0,
-                "yanchor": "bottom", "font": {"size": 10},
-                "itemclick": False, "itemdoubleclick": False},
-        showlegend=(label == "GDP"),
+        margin={"l": 54, "r": 12, "t": 12, "b": 30},
+        xaxis={"title": None, "range": [first_year - .5, last_year + .5],
+               "fixedrange": True, "dtick": 1 if span <= 10 else 5},
+        yaxis=yaxis,
+        showlegend=False,
         hovermode="closest", dragmode=False,
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
     if first_year <= int(chosen_year) <= last_year:
         chart.add_vline(x=int(chosen_year), line_width=1,
-                        line_dash="dot", line_color="#C99B45", opacity=0.7)
+                        line_dash="dot", line_color="#C99B45", opacity=0.8)
     return chart
 
 
 def render_page4():
-    """사용자 우선순위와 구간으로 최대 5개국을 추출·비교하는 세 번째 화면."""
+    """우선순위와 구간으로 최대 5개국을 추출·비교하는 세 번째 화면."""
     render_page_strip("page4")
     st.markdown("""<style>
-    .st-key-p4_country_list [data-testid="stVerticalBlockBorderWrapper"] {
-        border-color: #E1E9F3 !important; border-radius: 10px !important;
+    .st-key-card_p4_filter [data-testid="stHorizontalBlock"] {column-gap: 1.3rem !important;}
+    .st-key-card_p4_filter [data-testid="stSlider"] {padding: 4px 10px 0 !important;}
+    .st-key-card_p4_filter [data-testid="stRadio"] label p {font-size: 13px !important;}
+    .p4-filter-range {font-size: 12px; color: #52667D; line-height: 1.5; min-height: 36px;
+        padding-left: 6px;}
+    .st-key-card_p4_filter [data-testid="stMarkdownContainer"]:has(.p4-filter-range) {
+        margin-bottom: 0 !important;
     }
-    .st-key-p4_country_list .stButton > button {
-        text-align: left; justify-content: flex-start; min-height: 40px;
-        white-space: normal; font-weight: 700;
+    .p4-result-title {color: #12365e; font-size: 16px; font-weight: 700; margin: 4px 0 2px;}
+    .stApp [class*="st-key-card_p4_country_"] {
+        position: relative; padding: 11px 15px !important; cursor: pointer;
+        transition: box-shadow .15s, border-color .15s;
     }
-    .p4-caption {font-size:12px;color:#60748C;line-height:1.5;}
-    .p4-country-value {font-size:12px;color:#52667D;line-height:1.35;}
-    .p4-selection-note {background:#F0F6FC;border-left:3px solid #236CB7;
-        padding:8px 12px;border-radius:4px;font-size:12px;color:#2D5075;}
-    /* 3페이지: 빨간 슬라이더 현재값이 지표명/이웃 열과 겹치지 않도록 공간 확보 */
-    .st-key-p4_filter_frame [data-testid="stVerticalBlock"] {gap: .40rem;}
-    .st-key-p4_filter_frame [data-testid="stHorizontalBlock"] {column-gap: 1.3rem !important;}
-    .st-key-p4_filter_frame [data-testid="stSlider"] {
-        box-sizing: border-box;
-        padding: 27px 17px 3px !important;
-        margin-top: 10px !important;
-        min-width: 0;
+    /* Streamlit 글자 영역의 기본 음수 여백(-1rem)을 없애 카드 위아래 여백을 같게 */
+    .stApp [class*="st-key-card_p4_country_"] [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
     }
-    .st-key-p4_filter_frame [data-testid="stSlider"] [data-baseweb="slider"] {
-        box-sizing: border-box;
-        min-width: 0;
+    .stApp [class*="st-key-card_p4_country_"]:hover {
+        border-color: #9DBDF0 !important; box-shadow: 0 4px 14px rgba(31, 111, 235, .12);
     }
-    .st-key-p4_filter_frame .p4-filter-heading {
-        font-size: 12px; font-weight: 700; color: #34516F;
-        margin: 0 0 13px; padding-top: 5px;
-        white-space: normal; line-height: 1.5;
-        overflow-wrap: anywhere;
+    .stApp [class*="st-key-card_p4_country_"] [data-testid="stElementContainer"]:has(.stButton) {
+        position: absolute !important; inset: 0; z-index: 3; margin: 0 !important;
+        width: 100% !important; max-width: none !important; height: 100% !important;
     }
-    /* 빨간 값 표시가 긴 GDP/군사비에도 옆 열로 튀어나가지 않도록 축소 */
-    .st-key-p4_filter_frame [data-testid="stSlider"] [data-testid="stSliderThumbValue"],
-    .st-key-p4_filter_frame [data-testid="stSlider"] [data-testid="stThumbValue"] {
-        font-size: 11px !important;
-        white-space: nowrap;
+    .stApp [class*="st-key-card_p4_country_"] .stButton,
+    .stApp [class*="st-key-card_p4_country_"] .stButton > button {
+        width: 100% !important; height: 100% !important; opacity: 0; cursor: pointer;
     }
+    .p4-card-head {display: flex; align-items: center; gap: 9px;
+        padding: 0 2px 7px; margin-bottom: 6px; border-bottom: 1px solid #E6ECF3;}
+    .p4-card-rank {color: #6B7C90; font-size: 13px; font-weight: 800;}
+    .p4-card-flag {width: 30px; height: auto; border-radius: 3px;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.10);}
+    .p4-card-name {color: #0B2545; font-size: 15px; font-weight: 800;
+        letter-spacing: -0.3px; line-height: 1.25; min-width: 0; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis;}
+    /* 구간 기준 · 금액 축 라디오를 각 영역 오른쪽 끝에 붙입니다. */
+    .st-key-p4_mode_box, [class*="st-key-p4_axis_box"] {align-items: flex-end;}
+    .st-key-p4_mode_box [data-testid="stRadio"],
+    [class*="st-key-p4_axis_box"] [data-testid="stRadio"],
+    [class*="st-key-p4_axis_box"] [data-testid="stCheckbox"] {width: auto !important;}
+    .st-key-p4_mode_box [role="radiogroup"],
+    [class*="st-key-p4_axis_box"] [role="radiogroup"] {justify-content: flex-end;}
+    .p4-card-head .p4-card-iso {margin-left: auto; color: #6B7C90; font-size: 12px;
+        font-weight: 700; letter-spacing: 0.3px;}
+    .p4-metrics {display: grid; grid-template-columns: 1fr; gap: 2px; padding: 0 2px;}
+    .p4-m {display: flex; align-items: baseline; justify-content: space-between;
+        gap: 6px; line-height: 1.3; white-space: nowrap;}
+    .p4-m span {color: #64748B; font-size: 12px;}
+    .p4-m b {color: #12365e; font-size: 13px; font-weight: 800;}
+    /* 카드 목록을 오른쪽 그래프 4개(차트 300px × 2줄 + 제목·여백)와 같은 높이로 맞추고
+       남는 공간은 카드 사이 간격으로 나눕니다. */
+    .st-key-p4_country_list {min-height: 783px; display: flex; flex-direction: column;
+        justify-content: space-between; gap: 10px;}
     </style>""", unsafe_allow_html=True)
 
     year_data = p4_candidate_pool(df, selected_year)
     available = [label for label, spec in P4_INDICATORS.items()
                  if year_data[spec["column"]].notna().any()]
     if not available:
-        st.warning(f"{selected_year}년에 사용할 수 있는 지표가 없습니다.")
+        st.warning(f"{selected_year}년에 사용할 수 있는 지표가 없습니다. 다른 연도를 선택해 주세요.")
         return
     if "분쟁위험도" not in available:
-        st.info(f"{selected_year}년에는 분쟁위험도 데이터가 없어 선택 목록에서 제외했습니다.")
+        st.info(f"분쟁위험도는 {RISK_START}년부터 제공되어 {selected_year}년에는 선택 목록에서 제외했습니다.")
+    # 사용 가능한 지표 자료가 모두 있는 국가만 후보로 둡니다
+    # (자료가 빠진 국가는 카드·그래프에 제대로 표시되지 않으므로).
+    year_data = year_data.dropna(
+        subset=[P4_INDICATORS[label]["column"] for label in available]
+    )
 
-    with st.container(border=True, key="p4_filter_frame"):
-        st.markdown("#### 1. 지표 우선순위와 허용 범위")
-        st.caption("왼쪽부터 우선순위 순서입니다. 선택한 모든 범위를 만족하는 국가를 추출합니다.")
-        available_defaults = [x for x in P4_DEFAULT_PRIORITY if x in available]
-        priority_slots = st.columns(4, gap="small")
-        priorities = []
-        with priority_slots[0]:
-            first = st.selectbox(
-                "1순위 · 필수", options=available,
-                index=available.index(available_defaults[0]),
-                key=f"p4_priority_1_{selected_year}",
+    # --------------------------------------------------------
+    # 1. 우선순위 · 정렬 방향 · 구간
+    # --------------------------------------------------------
+    with st.container(border=True, key="card_p4_filter"):
+        title_col, mode_col = st.columns([4, 1], vertical_alignment="top")
+        with title_col:
+            render_html(
+                '<div class="panel-title-inline">탐색 조건</div>'
+                f'<div class="panel-note">{selected_year}년 {len(available)}개 지표 자료가 모두 있는 '
+                f'{len(year_data)}개국 기준 · 우선순위 순서대로 정렬</div>'
             )
-            priorities.append(first)
-        for position in range(2, 5):
+        with mode_col:
+            with st.container(key="p4_mode_box"):
+                range_mode = st.radio(
+                    "구간 기준", P4_RANGE_MODES, horizontal=True,
+                    key="p4_range_mode", label_visibility="collapsed",
+                )
+
+        defaults = [x for x in P4_DEFAULT_PRIORITY if x in available]
+        slots = st.columns(4, gap="small")
+        priorities, ranges, directions = [], {}, {}
+        # 앞 순위 조건을 통과한 국가만 다음 순위로 넘깁니다.
+        # 백분위는 매 순위마다 "남은 국가들 안에서" 다시 계산합니다.
+        pool = year_data
+
+        for position in range(1, 5):
             remaining = [x for x in available if x not in priorities]
             if not remaining:
                 break
-            opts = ["선택 안 함"] + remaining
-            prefer = available_defaults[position-1] if position-1 < len(available_defaults) else None
-            default_idx = opts.index(prefer) if prefer in opts else 0
-            # 선행 선택이 달라지면 종속 위젯의 옵션도 새로 생성
-            key = f"p4_priority_{position}_{selected_year}_{'_'.join(priorities)}"
-            with priority_slots[position-1]:
-                picked = st.selectbox(f"{position}순위 · 선택", opts,
-                                      index=default_idx, key=key)
-            if picked != "선택 안 함":
-                priorities.append(picked)
+            with slots[position - 1]:
+                if position == 1:
+                    label = st.selectbox(
+                        "1순위 · 필수", options=available,
+                        index=available.index(defaults[0]),
+                        key=f"p4_priority_1_{selected_year}",
+                    )
+                else:
+                    options = ["선택 안 함"] + remaining
+                    prefer = defaults[position - 1] if position - 1 < len(defaults) else None
+                    # 앞 순위가 바뀌면 선택지가 달라지므로 위젯을 새로 만듭니다.
+                    label = st.selectbox(
+                        f"{position}순위 · 선택", options,
+                        index=options.index(prefer) if prefer in options else 0,
+                        key=f"p4_priority_{position}_{selected_year}_{'_'.join(priorities)}",
+                    )
+                    if label == "선택 안 함":
+                        continue
 
-        # 각 지표의 허용 범위와 정렬을 한 줄에 모아 설정 패널 높이를 줄입니다.
-        filter_cols = st.columns(4, gap="small")
-        ranges, directions = {}, {}
-        for idx, label in enumerate(priorities):
-            spec = P4_INDICATORS[label]
-            vals = pd.to_numeric(year_data[spec["column"]], errors="coerce")
-            valid = vals.dropna() / spec["scale"]
-            if valid.empty:
-                continue
-            min_v, max_v = float(valid.min()), float(valid.max())
-            # 실제 단위 그대로 범위 슬라이더 사용. 극단값이 포함돼도
-            # 정밀도를 잃지 않도록 데이터 범위에 맞춰 표시 자릿수를 정함.
-            precision = int(spec["precision"])
-            factor = 10 ** precision
-            slider_min = float(np.floor(min_v * factor) / factor)
-            slider_max = float(np.ceil(max_v * factor) / factor)
-            if slider_max <= slider_min:
-                slider_max = slider_min + 1.0 / factor
-            step = max((slider_max - slider_min) / 400.0, 1.0 / factor)
-            # Streamlit의 숫자 슬라이더 기본값은 전체 구간 -> 첫 화면에서 과도한 필터 방지
-            with filter_cols[idx]:
+                priorities.append(label)
+                column = P4_INDICATORS[label]["column"]
+                values = pool[column].dropna()
+
+                directions[label] = st.radio(
+                    f"{label} 정렬", P4_DIRECTIONS, horizontal=True,
+                    key=f"p4_direction_{label}",
+                    label_visibility="collapsed",
+                )
+
+                if values.empty:
+                    pool = pool.iloc[:0]
+                    st.markdown(
+                        '<div class="p4-filter-range">앞 순위 조건을 만족하는 국가가 없습니다.</div>',
+                        unsafe_allow_html=True,
+                    )
+                    continue
+
+                if range_mode == "백분위":
+                    low, high = st.slider(
+                        f"{label} 백분위 구간",
+                        min_value=0, max_value=100, value=(0, 100), step=5,
+                        format="%d%%",
+                        key=f"p4_range_{label}_{selected_year}",
+                        label_visibility="collapsed",
+                    )
+                    value_low = values.quantile(low / 100)
+                    value_high = values.quantile(high / 100)
+                    pct = pool[column].rank(pct=True, method="average") * 100
+                    keep = pct.notna() & pct.between(low - 1e-9, high + 1e-9)
+                else:
+                    unit, scale = P4_INPUT_UNITS[P4_INDICATORS[label]["kind"]]
+                    all_values = year_data[column].dropna()
+                    digits = 3 if P4_INDICATORS[label]["kind"] == "share" else 1
+                    factor = 10 ** digits
+                    slider_min = float(np.floor(float(all_values.min()) / scale * factor) / factor)
+                    slider_max = float(np.ceil(float(all_values.max()) / scale * factor) / factor)
+                    if slider_max <= slider_min:
+                        slider_max = slider_min + 1 / factor
+                    step = max(round((slider_max - slider_min) / 500, digits), 1 / factor)
+                    low, high = st.slider(
+                        f"{label} 실제 값 구간 ({unit})",
+                        min_value=slider_min, max_value=slider_max,
+                        value=(slider_min, slider_max), step=float(step),
+                        format=f"%.{digits}f",
+                        key=f"p4_value_{label}_{selected_year}",
+                        label_visibility="collapsed",
+                    )
+                    value_low, value_high = float(low) * scale, float(high) * scale
+                    keep = pool[column].notna() & pool[column].between(
+                        value_low - 1e-9, value_high + 1e-9)
+
+                before = len(pool)
+                pool = pool.loc[keep]
                 st.markdown(
-                    f'<div class="p4-filter-heading">'
-                    f'{idx+1}순위 · {html.escape(label)} ({html.escape(spec["unit"])})'
-                    f'</div>', unsafe_allow_html=True,
+                    '<div class="p4-filter-range">'
+                    f'{html.escape(p4_value_text(label, value_low))} ~ '
+                    f'{html.escape(p4_value_text(label, value_high))}'
+                    f'<br>{before}개국 중 {len(pool)}개국</div>',
+                    unsafe_allow_html=True,
                 )
-                low_high = st.slider(
-                    f"{label} 범위 ({spec['unit']})",
-                    min_value=slider_min, max_value=slider_max,
-                    value=(slider_min, slider_max),
-                    step=float(step), format=f"%.{precision}f",
-                    key=f"p4_range_{label}_{selected_year}",
-                    label_visibility="collapsed",
-                )
-                # 범위 선택값을 슬라이더 아래에도 한 줄로 표시해 숫자를 쉽게 확인합니다.
-                st.caption(
-                    f"선택: {low_high[0]:,.{precision}f} ~ "
-                    f"{low_high[1]:,.{precision}f} {spec['unit']}"
-                )
-                direction = st.selectbox(
-                    f"{label} 정렬 방향",
-                    ["높은 값 우선", "낮은 값 우선"],
-                    key=f"p4_direction_compact_{label}",
-                    label_visibility="collapsed",
-                )
-                ranges[label] = tuple(map(float, low_high))
-                directions[label] = direction
-        if len(priorities) < 4:
-            st.caption("필요한 지표만 선택할 수 있습니다. 분쟁위험도는 자료가 있는 연도에만 선택할 수 있습니다.")
 
-    shortlist, total = p4_filter_candidates(year_data, priorities, ranges, directions, top_n=5)
-    st.markdown("#### 2. 조건에 맞는 국가와 지표별 추이")
+    # --------------------------------------------------------
+    # 2. 추출 국가 + 지표별 추이
+    # --------------------------------------------------------
+    shortlist, total = p4_sort_candidates(pool, priorities, directions, top_n=5)
     if total == 0:
-        st.warning("선택한 구간을 모두 충족하는 국가가 없습니다. 구간을 넓히거나 우선순위 지표를 줄여 주세요.")
-
+        st.warning("선택한 구간을 모두 만족하는 국가가 없습니다. 구간을 넓히거나 지표 수를 줄여 주세요.")
         return
 
     isos = shortlist["Iso3"].astype(str).tolist()
-    # 페이지 방문 직후에는 첫 번째 추출 국가가 강조됩니다. 상단 국가 선택기
-    # 또는 아래 카드로 국가를 변경하면 추출 결과에 있을 때 같이 강조합니다.
+    # 상단 국가 선택이 추출 결과에 있으면 그 국가를, 아니면 1위 국가를 강조합니다.
     old_global = st.session_state.get("p4_last_global_country")
     if old_global != st.session_state.selected_country:
         st.session_state.p4_last_global_country = st.session_state.selected_country
@@ -7778,79 +7798,102 @@ def render_page4():
     if st.session_state.get("p4_highlight_iso") not in isos:
         st.session_state.p4_highlight_iso = isos[0]
     active_iso = st.session_state.p4_highlight_iso
-    st.caption(
-        f"{selected_year}년 · 조건에 일치하는 {total}개 국가 중 "
-        f"{len(shortlist)}개 표시 · 정렬: " + " → ".join(priorities)
+
+    render_html(
+        f'<div class="p4-result-title">{selected_year}년 · 조건을 만족하는 '
+        f'{total}개국 중 상위 {len(shortlist)}개</div>'
     )
 
-    list_col, graph_col = st.columns([1.03, 3.25], gap="medium")
+    card_colors = {
+        iso: P4_COUNTRY_COLORS[i % len(P4_COUNTRY_COLORS)] for i, iso in enumerate(isos)
+    }
+    card_css = "".join(
+        f".stApp .stVerticalBlock.st-key-card_p4_country_{iso} "
+        f"{{border-left: 5px solid {color} !important;}}"
+        for iso, color in card_colors.items()
+    )
+    st.markdown(
+        f"""<style>
+        {card_css}
+        .stApp .stVerticalBlock.st-key-card_p4_country_{active_iso} {{
+            border: 2px solid #1F6FEB !important;
+            border-left: 5px solid {card_colors[active_iso]} !important;
+            background: #F3F8FF !important;
+        }}
+        </style>""",
+        unsafe_allow_html=True,
+    )
+
+    list_col, graph_col = st.columns([0.87, 3.33], gap="medium")
     with list_col:
         with st.container(key="p4_country_list"):
-            st.markdown("**추출 국가 (최대 5개)**")
-            st.caption("국가를 누르면 오른쪽 4개 그래프의 해당 국가가 강조됩니다.")
             for rank, (_, row) in enumerate(shortlist.iterrows(), 1):
                 iso = str(row["Iso3"])
                 name = str(row["Country"])
-                shown = country_display(name)
-                selected = active_iso == iso
-                with st.container(border=True, key=f"p4_country_{iso}"):
-                    flag_col, name_col = st.columns([0.18, 0.82], gap="small",
-                                                     vertical_alignment="center")
-                    with flag_col:
-                        url = get_flag_url(iso)
-                        if url:
-                            st.markdown(
-                                f'<img src="{html.escape(url)}" width="37" '
-                                f'height="25" style="object-fit:cover;border:1px solid #ddd;border-radius:3px" '
-                                f'alt="{html.escape(iso)}">',
-                                unsafe_allow_html=True,
-                            )
-                        else:
-                            st.write("🌐")
-                    with name_col:
-                        if st.button(
-                            f"{rank}. {shown}  {'✓' if selected else '↗'}",
-                            type="primary" if selected else "secondary",
-                            use_container_width=True,
-                            key=f"p4_choose_{iso}",
-                        ):
-                            st.session_state.p4_highlight_iso = iso
-                            st.session_state.p4_last_global_country = name
-                            if name != st.session_state.selected_country:
-                                st.session_state.selected_country = name
-                                st.session_state.country_widget_version += 1
-                                st.session_state.search_widget_version += 1
-                                st.session_state.map_widget_version += 1
-                            st.rerun()
-                    primary_metric = priorities[0]
-                    st.markdown(
-                        '<div class="p4-country-value">'
-                        f'{html.escape(primary_metric)}: '
-                        f'<b>{html.escape(p4_value_text(primary_metric, row[P4_INDICATORS[primary_metric]["column"]]))}</b>'
-                        '</div>', unsafe_allow_html=True,
+                color = P4_COUNTRY_COLORS[(rank - 1) % len(P4_COUNTRY_COLORS)]
+                selected = iso == active_iso
+                with st.container(border=True, key=f"card_p4_country_{iso}"):
+                    metric_order = priorities + [x for x in available if x not in priorities]
+                    metrics_html = "".join(
+                        f'<div class="p4-m"><span>{html.escape(label)}</span>'
+                        f"<b>{html.escape(p4_value_text(label, row[P4_INDICATORS[label]['column']]))}</b></div>"
+                        for label in metric_order
                     )
+                    st.markdown(
+                        '<div class="p4-card">'
+                        '<div class="p4-card-head">'
+                        f'<span class="p4-card-rank">{rank}</span>'
+                        f'{flag_html(iso, "p4-card-flag")}'
+                        f'<span class="p4-card-name">{html.escape(country_display(name))}</span>'
+                        f'<span class="p4-card-iso">{html.escape(iso)}</span>'
+                        '</div>'
+                        f'<div class="p4-metrics">{metrics_html}</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+                    # 카드 전체를 덮는 투명 버튼: 카드를 누르면 그래프에서 강조됩니다.
+                    if st.button(f"{rank}. {country_display(name)} 강조", key=f"p4_choose_{iso}"):
+                        st.session_state.p4_highlight_iso = iso
+                        st.session_state.p4_last_global_country = name
+                        if name != st.session_state.selected_country:
+                            st.session_state.selected_country = name
+                            st.session_state.country_widget_version += 1
+                            st.session_state.map_widget_version += 1
+                        st.rerun()
+
     with graph_col:
-        st.markdown(
-            '<div class="p4-selection-note">'
-            f'<b>{html.escape(country_display(shortlist.loc[shortlist["Iso3"] == active_iso, "Country"].iloc[0]))}</b>'
-            ' 선택 · 진한 파란색 선으로 강조 · 다른 국가들은 연한 선으로 표시'
-            '</div>', unsafe_allow_html=True,
-        )
-        metrics_2x2 = [["GDP", "군사비"], ["분쟁위험도", "무기 수입 점유율"]]
-        for metric_pair in metrics_2x2:
+        # 그래프도 국가 카드 지표와 같은 순서(사용자 우선순위 → 나머지)로 배치
+        chart_order = priorities + [x for x in P4_INDICATORS if x not in priorities]
+        for pair in (chart_order[0:2], chart_order[2:4]):
             left, right = st.columns(2, gap="small")
-            for container, label in zip([left, right], metric_pair):
+            for container, label in zip([left, right], pair):
                 with container:
-                    with st.container(border=True, key=f"p4_chart_{P4_INDICATORS[label]['column']}"):
-                        st.markdown(f"**{label}**")
-                        fig = p4_trend_chart(df, isos, label, active_iso, selected_year)
+                    column = P4_INDICATORS[label]["column"]
+                    with st.container(border=True, key=f"card_p4_chart_{column}"):
+                        log_axis = False
+                        if P4_INDICATORS[label]["kind"] == "money":
+                            # 금액 그래프만 카드 안 오른쪽 위에서 실제 값/로그 축을 고릅니다.
+                            head_col, axis_col = st.columns([1, 1.3], vertical_alignment="center")
+                            with head_col:
+                                render_html(f'<div class="panel-title-inline">{html.escape(label)}</div>')
+                            with axis_col:
+                                with st.container(key=f"p4_axis_box_{column}"):
+                                    log_axis = st.toggle("로그", key=f"p4_log_{column}")
+                        else:
+                            render_html(f'<div class="panel-title-inline">{html.escape(label)}</div>')
                         st.plotly_chart(
-                            fig, use_container_width=True,
-                            key=f"p4_plot_{P4_INDICATORS[label]['column']}_{'_'.join(isos)}_{active_iso}",
+                            p4_trend_chart(df, isos, label, active_iso, selected_year,
+                                           log_axis=log_axis),
+                            use_container_width=True,
+                            key=f"p4_plot_{P4_INDICATORS[label]['column']}",
                             config={"displayModeBar": False, "displaylogo": False,
                                     "scrollZoom": False, "responsive": True},
                         )
-    st.caption("이 화면은 선택 조건에 따른 탐색을 지원하며, 추출 순서는 사용자가 지정한 정렬 기준입니다. 미래 무기 수요나 실제 수출 가능성을 예측한 순위가 아닙니다.")
+
+    st.caption(
+        "이 화면은 선택한 조건에 따른 탐색을 돕기 위한 것이며, "
+        "미래 무기 수요나 실제 수출 가능성을 예측한 순위가 아닙니다."
+    )
 
 
 
@@ -7883,11 +7926,9 @@ if st.session_state.app_page == "page1":
             # 국가가 없는 상태에서 처음 국가별 탭을 누른 경우:
             # 같은 선택 국가를 상단 필터에도 반영하고 데이터를 다시 계산합니다.
             if st.session_state.selected_country is None:
-                st.session_state.selected_country = default_country
-                st.session_state.country_widget_version += 1
-                st.session_state.search_widget_version += 1
-                st.rerun()
-            render_country_view()
+                st.info("위에서 국가를 선택하거나 입력하면 국가별 지표가 표시됩니다.")
+            else:
+                render_country_view()
         else:
             render_page1()
 
