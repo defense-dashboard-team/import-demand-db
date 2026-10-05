@@ -18,7 +18,7 @@ engine = get_engine()
 
 # 이 과정이 끝났으면 코드 파일이 aws rds 서버 안에 생성된 data base에 연결 된 것
 
-file_path = 'data/SIPRI-Milex-data-1949-2025_v1.2.xlsx'
+file_path = '00_files/SIPRI-Milex-data-1949-2025_v1.2.xlsx'
 
 # 6번째 행부터 데이터가 시작 -> header = 5
 df_usd_raw = pd.read_excel(file_path, sheet_name = 'Current US$', header = 5)

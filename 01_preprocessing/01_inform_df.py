@@ -16,7 +16,7 @@ with base_engine.connect() as conn:
 engine = get_engine()
 
 
-file_path = 'data/INFORM2026_TREND_2017_2026_v72_ALL.xlsx'
+file_path = '00_files/INFORM2026_TREND_2017_2026_v72_ALL.xlsx'
 
 df = pd.read_excel(file_path, sheet_name='INFORM2026Trend')
 
