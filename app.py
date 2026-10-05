@@ -1,6 +1,6 @@
 """무기 수출 유망국 대시보드 실행 파일.
 
-    streamlit run app.py   (app_test.py 와 같은 내용)
+    streamlit run app.py
 
 화면·차트·데이터 코드는 dashboard/ 패키지에 있고, 여기서는 순서대로 부르기만 함.
 
